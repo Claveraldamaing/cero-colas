@@ -26,14 +26,15 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.config import settings
-from app.database import Base, SessionLocal, engine, get_db
-from app.p1.auth_models import (
-    P1AuthAttempt, P1Challenge, P1RecoveryToken, P1Session, P1User, default_preferences,
-)
-from app.p1.security import (
+from app.core.config import settings
+from app.core.database import Base, SessionLocal, engine, get_db
+from app.core.errors import problem
+from app.core.security import (
     DUMMY_PASSWORD_HASH, csrf_for_token, hash_password, hash_token, new_token,
     password_problem, utcnow, verify_password,
+)
+from app.p1.auth_models import (
+    P1AuthAttempt, P1Challenge, P1RecoveryToken, P1Session, P1User, default_preferences,
 )
 
 router = APIRouter(prefix="/auth", tags=["P1 · Usuarios y seguridad"])
@@ -48,10 +49,6 @@ def option(name, default=None):
 
 def truthy(value):
     return value is True or str(value).lower() in {"1", "true", "yes"}
-
-
-def problem(status: int, code: str, message: str):
-    raise HTTPException(status_code=status, detail={"code": code, "message": message})
 
 
 def normalize_email(value: str):

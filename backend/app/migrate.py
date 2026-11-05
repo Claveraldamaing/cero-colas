@@ -1,6 +1,6 @@
 """Versioned, additive initial P1 migration. Never imports or copies legacy data."""
 from sqlalchemy import Column, String, DateTime, select, func
-from app.database import Base, engine
+from app.core.database import Base, engine
 
 
 class SchemaMigration(Base):

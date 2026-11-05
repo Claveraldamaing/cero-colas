@@ -1,8 +1,8 @@
 import uuid
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, JSON, String
-from app.database import Base
-from app.p1.security import utcnow
+from app.core.database import Base
+from app.core.security import utcnow
 
 
 def uuid_string():

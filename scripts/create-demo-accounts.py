@@ -6,11 +6,11 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'backend'))
-from app.config import settings
-from app.database import SessionLocal
+from app.core.config import settings
+from app.core.database import SessionLocal
+from app.core.security import hash_password
 from app.migrate import migrate
 from app.p1.auth_models import P1User
-from app.p1.security import hash_password
 
 if settings.ENVIRONMENT != 'development' or settings.HOSPITAL_MODE != 'simulator':
     raise SystemExit('Solo se permiten cuentas de demostración en desarrollo con simulador.')

@@ -8,8 +8,8 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.config import settings
-from app.database import get_db
+from app.core.config import settings
+from app.core.database import get_db
 from app.p1.auth import current_session, current_user, require_admin, require_csrf, verify_challenge
 from app.p1.auth_models import P1Session, P1User
 from app.p1.hospital import HospitalError, LIMA, hospital_client

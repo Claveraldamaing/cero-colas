@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import CheckConstraint, Column, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 
-from app.database import Base
+from app.core.database import Base
 
 
 def utcnow():

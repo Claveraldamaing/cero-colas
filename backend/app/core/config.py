@@ -4,7 +4,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=Path(__file__).resolve().parents[1] / '.env', extra='ignore')
+    # core/config.py lives two levels below backend; keep .env at backend/.env.
+    model_config = SettingsConfigDict(env_file=Path(__file__).resolve().parents[2] / '.env', extra='ignore')
     PROJECT_NAME: str = 'Cero Colas · Portal P1'
     VERSION: str = '2.0.0'
     API_V1_PREFIX: str = '/api/v1'
@@ -30,7 +31,7 @@ class Settings(BaseSettings):
     SMTP_FROM: str = ''
     SMTP_STARTTLS: bool = True
     FRONTEND_URL: str = 'http://127.0.0.1:5173'
-    LOCAL_MAILBOX_DIR: str = str(Path(__file__).resolve().parents[1] / '.local' / 'mailbox')
+    LOCAL_MAILBOX_DIR: str = str(Path(__file__).resolve().parents[2] / '.local' / 'mailbox')
 
     @model_validator(mode='after')
     def production_requirements(self):

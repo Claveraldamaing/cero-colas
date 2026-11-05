@@ -3,7 +3,7 @@ import uuid
 import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import StaticPool
-from app.config import settings
+from app.core.config import settings
 
 
 def pytest_addoption(parser):

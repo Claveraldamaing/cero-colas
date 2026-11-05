@@ -7,8 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
-from app.config import settings
-from app.database import engine
+from app.core.config import settings
+from app.core.database import engine
 
 @asynccontextmanager
 async def lifespan(app):

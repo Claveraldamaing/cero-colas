@@ -13,7 +13,7 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.database import Base, get_db
+from app.core.database import Base, get_db
 from app.p1 import auth, hospital, portal
 from app.p1.auth_models import P1Session, P1User
 from app.p1.hospital import HospitalClient, HospitalError

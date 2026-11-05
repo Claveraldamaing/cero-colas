@@ -12,10 +12,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.database import Base, get_db
+from app.core.database import Base, get_db
+from app.core.security import hash_password, hash_token, utcnow, verify_password
 from app.p1 import auth
 from app.p1.auth_models import P1Session, P1User
-from app.p1.security import hash_password, hash_token, utcnow, verify_password
 
 
 PASSWORD = "PrototipoSeguro123"
