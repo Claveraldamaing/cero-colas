@@ -1,4 +1,4 @@
-"""HTTP routes for administrative account management."""
+"""HTTP routes for administrative account and portal dashboard management."""
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,7 @@ from . import service
 from .schemas import AccountInput
 
 router = APIRouter(prefix="/admin", tags=["P1 · Administración de usuarios"])
+portal_dashboard_router = APIRouter(prefix="/portal/admin", tags=["P1 · Administración"])
 
 
 @router.get("/users")
@@ -21,3 +22,8 @@ def list_users(response: Response, user: P1User = Depends(require_admin), db: Se
 @router.patch("/users/{user_id}", dependencies=[Depends(require_csrf)])
 def update_account(user_id: str, payload: AccountInput, user: P1User = Depends(require_admin), db: Session = Depends(get_db)):
     return service.update_account(db, user, user_id, payload)
+
+
+@portal_dashboard_router.get("/dashboard")
+def portal_dashboard(user: P1User = Depends(require_admin), db: Session = Depends(get_db)):
+    return service.portal_dashboard(db)

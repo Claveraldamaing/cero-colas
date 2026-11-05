@@ -15,12 +15,15 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
 from app.core.database import Base, get_db
-from app.modules.auth import router as auth_router
-from app.modules.auth.models import P1Session, P1User
 from app.integrations import hospital
 from app.integrations.hospital import HospitalClient, HospitalError
-from app.p1 import portal
-from app.p1.portal_models import P1Survey, P1UsageEvent
+from app.modules.admin.router import portal_dashboard_router
+from app.modules.auth import router as auth_router
+from app.modules.auth.models import P1Session, P1User
+from app.modules.portal import router as portal_router
+from app.modules.portal import service as portal_service
+from app.modules.surveys import router as surveys_router
+from app.modules.surveys.models import P1Survey, P1UsageEvent
 
 
 def sample_eligibility():
@@ -62,14 +65,16 @@ def setup(monkeypatch, isolated_engine):
 
     config = SimpleNamespace(HOSPITAL_MODE="simulator", HOSPITAL_API_BASE_URL="http://test-hospital", HOSPITAL_CLIENT_ID="test-client", HOSPITAL_CLIENT_SECRET="test-secret", HOSPITAL_API_TIMEOUT_SECONDS=1, REFERENCE_MAX_AGE_DAYS=None)
     service = HospitalClient(config, httpx.MockTransport(transport))
-    monkeypatch.setattr(portal, "hospital_client", service)
+    monkeypatch.setattr(portal_service, "hospital_client", service)
     monkeypatch.setattr(hospital, "hospital_client", service)
     monkeypatch.setattr(settings, "COOKIE_SECURE", False)
-    monkeypatch.setattr(portal.settings, "HOSPITAL_PRIVACY_POLICY_APPROVED", False)
-    monkeypatch.setattr(portal.settings, "HOSPITAL_PRIVACY_POLICY_TEXT", "")
+    monkeypatch.setattr(settings, "HOSPITAL_PRIVACY_POLICY_APPROVED", False)
+    monkeypatch.setattr(settings, "HOSPITAL_PRIVACY_POLICY_TEXT", "")
     app = FastAPI()
     app.include_router(auth_router.router, prefix="/api/v1")
-    app.include_router(portal.router, prefix="/api/v1")
+    app.include_router(portal_router.router, prefix="/api/v1")
+    app.include_router(surveys_router.router, prefix="/api/v1")
+    app.include_router(portal_dashboard_router, prefix="/api/v1")
     app.dependency_overrides[get_db] = db_dependency
     with TestClient(app) as client:
         challenge = solve_challenge(client)

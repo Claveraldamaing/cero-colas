@@ -57,12 +57,15 @@ def health():
     except Exception:
         return JSONResponse(status_code=503, content={'status': 'unavailable', 'database': 'unavailable'})
 
-from app.modules.admin.router import router as admin_router
+from app.modules.admin.router import portal_dashboard_router, router as admin_router
 from app.modules.auth.router import router as auth_router
-from app.p1.portal import router as portal_router
+from app.modules.portal.router import router as portal_router
+from app.modules.surveys.router import router as surveys_router
 app.include_router(auth_router, prefix=settings.API_V1_PREFIX)
 app.include_router(admin_router, prefix=settings.API_V1_PREFIX)
 app.include_router(portal_router, prefix=settings.API_V1_PREFIX)
+app.include_router(surveys_router, prefix=settings.API_V1_PREFIX)
+app.include_router(portal_dashboard_router, prefix=settings.API_V1_PREFIX)
 
 # Las rutas del prototipo anterior no se exponen: no tienen autenticación
 # y sus datos ficticios no deben confundirse con operaciones hospitalarias.
