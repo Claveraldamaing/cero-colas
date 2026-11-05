@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, HeartPulse, LockKeyhole } from 'lucide-react';
-import { api } from '../shared/api/client';
-import { Challenge, Field, Notice, Submit } from '../shared/ui';
-import { PASSWORD_HINT, passwordError } from '../shared/validation/password';
-export default function Auth({ onAuthenticated, expiredMessage }) {
+import { Challenge, Field, Notice, Submit } from '../../shared/ui';
+import { PASSWORD_HINT, passwordError } from '../../shared/validation/password';
+import { forgotPassword, login, register, resetPassword } from './api';
+export default function AuthPage({ onAuthenticated, expiredMessage }) {
   const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('reset_token') || new URLSearchParams(window.location.search).get('reset'));
   useEffect(() => { if (resetToken) window.history.replaceState({}, '', window.location.pathname); }, [resetToken]);
   const [mode, setMode] = useState(resetToken ? 'reset' : 'login');
@@ -28,14 +28,14 @@ export default function Auth({ onAuthenticated, expiredMessage }) {
     setBusy(true);
     try {
       if (mode === 'forgot') {
-        const data = await api('/auth/forgot-password', { method: 'POST', body: { email: form.email.trim(), ...challenge }, silentUnauthorized: true });
+        const data = await forgotPassword({ email: form.email.trim(), ...challenge });
         setMessage(data.message || 'Si existe una cuenta con ese correo, recibirás instrucciones para recuperar el acceso.'); setChallengeRevision(v => v + 1);
       } else if (mode === 'reset') {
-        const data = await api('/auth/reset-password', { method: 'POST', body: { token: resetToken, new_password: form.password }, silentUnauthorized: true });
+        const data = await resetPassword({ token: resetToken, new_password: form.password });
         switchMode('login'); setMessage(data.message || 'Contraseña actualizada. Ya puedes iniciar sesión.');
       } else {
         const body = { email: form.email.trim(), password: form.password, ...challenge, ...(mode === 'register' ? { name: form.name.trim() } : {}) };
-        const data = await api(`/auth/${mode}`, { method: 'POST', body, silentUnauthorized: true }); onAuthenticated(data.user);
+        const data = mode === 'register' ? await register(body) : await login(body); onAuthenticated(data.user);
       }
     } catch (e) { setError(e.message); setChallengeRevision(v => v + 1); }
     finally { setBusy(false); }
