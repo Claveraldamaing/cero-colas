@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { api } from './api';
-import { Badge, Field, Notice, PageHeading, Submit, formatDate } from './ui';
-import { PASSWORD_HINT, passwordError } from './Auth';
+import { api } from '../shared/api/client';
+import { Badge, Field, Notice, PageHeading, Submit } from '../shared/ui';
+import { formatDate } from '../shared/lib/date';
+import { PASSWORD_HINT, passwordError } from '../shared/validation/password';
 export function Profile({ user, onUser }) {
   const [name, setName] = useState(user.name);
   const [busy, setBusy] = useState(false);

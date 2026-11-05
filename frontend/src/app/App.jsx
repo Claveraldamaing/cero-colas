@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { HeartPulse, Home, UserRound, ShieldCheck, Settings2, ClipboardCheck, MessageSquare, Users, LayoutDashboard, LogOut, Menu, X } from 'lucide-react';
-import { api, setCsrf, setSessionExpiredHandler } from './api';
-import Auth from './Auth';
-import { Profile, Preferences, Security } from './Account';
-import { PatientDashboard, Identification, Surveys } from './Portal';
-import { AdminDashboard, UserManagement } from './Admin';
-import { Notice, Skeleton } from './ui';
-import './p1.css';
+import { HeartPulse, LogOut, Menu, X } from 'lucide-react';
+import { api, setCsrf, setSessionExpiredHandler } from '../shared/api/client';
+import Auth from '../p1/Auth';
+import { Profile, Preferences, Security } from '../p1/Account';
+import { PatientDashboard, Identification, Surveys } from '../p1/Portal';
+import { AdminDashboard, UserManagement } from '../p1/Admin';
+import { Notice, Skeleton } from '../shared/ui';
+import { navigationFor } from './navigation';
+import '../styles/p1.css';
 
-export default function P1App() {
+export default function App() {
   const [user, setUser] = useState(null);
   const [resetMode] = useState(() => new URLSearchParams(window.location.search).has('reset_token') || new URLSearchParams(window.location.search).has('reset'));
   const [loading, setLoading] = useState(!resetMode);
@@ -41,11 +42,7 @@ export default function P1App() {
   async function logout() { setBusy(true); try { await api('/auth/logout', { method: 'POST' }); setUser(null); setCsrf(null); setView('dashboard'); setError(''); } catch (e) { setError(e.message); } finally { setBusy(false); } }
   if (loading) return <div className="initial-load"><HeartPulse size={34} aria-hidden="true" /><Skeleton label="Comprobando tu sesión" /></div>;
   if (!user) return <><Notice tone="error">{error}</Notice><Auth onAuthenticated={authenticated} expiredMessage={expired} /></>;
-  const nav = [
-    ...(user.role === 'ADMIN' ? [['admin', 'Resumen general', LayoutDashboard], ['users', 'Usuarios', Users]] : []),
-    ['dashboard', 'Mi inicio', Home], ['identify', 'Identificación', ClipboardCheck], ['surveys', 'Satisfacción', MessageSquare],
-    ['profile', 'Mi perfil', UserRound], ['security', 'Seguridad', ShieldCheck], ['preferences', 'Preferencias', Settings2],
-  ];
+  const nav = navigationFor(user);
   let page;
   switch (view) {
     case 'profile': page = <Profile user={user} onUser={setUser} />; break;

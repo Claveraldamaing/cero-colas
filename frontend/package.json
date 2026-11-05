@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "lint:p1": "oxlint src/p1 src/App.jsx src/main.jsx"
+    "lint:p1": "oxlint src/p1 src/app src/shared src/App.jsx src/main.jsx"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.3.3",

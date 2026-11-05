@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, CalendarDays, ClipboardCheck, RefreshCw, ShieldCheck } from 'lucide-react';
-import { api } from './api';
-import { Badge, Challenge, Field, LoadError, Notice, PageHeading, Skeleton, Submit, formatDate, useResource } from './ui';
+import { api } from '../shared/api/client';
+import { Badge, Challenge, Field, LoadError, Notice, PageHeading, Skeleton, Submit } from '../shared/ui';
+import { SourceNotice } from '../shared/ui/SourceNotice';
+import { useResource } from '../shared/hooks/useResource';
+import { formatDate } from '../shared/lib/date';
 
 const labels = { VIGENTE: 'Vigente', NO_VIGENTE: 'No vigente', NO_VERIFICABLE: 'No verificable', CONTINUADOR: 'Continuador', REINGRESANTE: 'Reingresante', NUEVO: 'Nuevo', ACEPTADA: 'Aceptada', RECIBIDA: 'Recibida' };
 const label = value => labels[value] || value || 'Sin consultar';
-
-export function SourceNotice({ source }) {
-  return source === 'simulator' ? <Notice tone="warning"><strong>Entorno de simulación.</strong> Los datos hospitalarios son ejemplos de prueba. No representan una atención ni una reserva real.</Notice> : null;
-}
 
 export function EligibilityDetails({ eligibility, compact = false }) {
   if (!eligibility) return <p className="muted">Identifica al paciente y consulta la elegibilidad para ver esta información.</p>;

@@ -1,12 +1,8 @@
-/* oxlint-disable react/only-export-components -- Shared password validation accompanies the account forms. */
 import { useEffect, useState } from 'react';
 import { ArrowLeft, HeartPulse, LockKeyhole } from 'lucide-react';
-import { api } from './api';
-import { Challenge, Field, Notice, Submit } from './ui';
-export const PASSWORD_HINT = 'Entre 10 y 128 caracteres, con una mayúscula, una minúscula y un número.';
-export function passwordError(value) {
-  return value.length < 10 || value.length > 128 || !/[A-Z]/.test(value) || !/[a-z]/.test(value) || !/\d/.test(value) ? PASSWORD_HINT : '';
-}
+import { api } from '../shared/api/client';
+import { Challenge, Field, Notice, Submit } from '../shared/ui';
+import { PASSWORD_HINT, passwordError } from '../shared/validation/password';
 export default function Auth({ onAuthenticated, expiredMessage }) {
   const [resetToken] = useState(() => new URLSearchParams(window.location.search).get('reset_token') || new URLSearchParams(window.location.search).get('reset'));
   useEffect(() => { if (resetToken) window.history.replaceState({}, '', window.location.pathname); }, [resetToken]);

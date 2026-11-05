@@ -1,7 +1,6 @@
-/* oxlint-disable react/only-export-components -- Small shared hooks and UI primitives intentionally share this module. */
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Info, RefreshCw } from 'lucide-react';
-import { api } from './api';
+import { api } from '../api/client';
 export function Notice({ children, tone = 'info', focus = false }) {
   const ref = useRef(null);
   useEffect(() => { if (focus) ref.current?.focus(); }, [children, focus]);
@@ -45,27 +44,5 @@ export function Skeleton({ label = 'Cargando información' }) {
 }
 export function LoadError({ error, retry }) {
   return <div className="stack"><Notice tone="error">{error}</Notice><button className="button secondary" onClick={retry}><RefreshCw size={17} aria-hidden="true" />Volver a intentar</button></div>;
-}
-export function useResource(path, revision = 0) {
-  const [state, setState] = useState({ data: null, loading: true, error: '' });
-  const [attempt, setAttempt] = useState(0);
-  useEffect(() => {
-    const controller = new AbortController();
-    // A changed endpoint invalidates the previous response until the fetch finishes.
-    // oxlint-disable-next-line react/set-state-in-effect
-    setState({ data: null, loading: true, error: '' });
-    api(path, { signal: controller.signal }).then(data => setState({ data, loading: false, error: '' })).catch(e => {
-      if (e.name !== 'AbortError') setState({ data: null, loading: false, error: e.message });
-    });
-    return () => controller.abort();
-  }, [path, revision, attempt]);
-  const reload = useCallback(() => setAttempt(v => v + 1), []);
-  return { ...state, reload };
-}
-export function formatDate(value, includeTime = false) {
-  if (!value) return 'No informada';
-  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? `${value}T12:00:00` : value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', ...(includeTime ? { timeStyle: 'short' } : {}), timeZone: 'America/Lima' }).format(date);
 }
 export function Badge({ children, tone = 'neutral' }) { return <span className={`badge ${tone}`}>{children}</span>; }

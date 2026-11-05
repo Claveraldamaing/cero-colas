@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { ArrowRight, RefreshCw, Search } from 'lucide-react';
-import { api } from './api';
-import { Badge, Field, LoadError, Notice, PageHeading, Skeleton, formatDate, useResource } from './ui';
-import { SourceNotice } from './Portal';
+import { api } from '../shared/api/client';
+import { Badge, Field, LoadError, Notice, PageHeading, Skeleton } from '../shared/ui';
+import { SourceNotice } from '../shared/ui/SourceNotice';
+import { useResource } from '../shared/hooks/useResource';
+import { formatDate } from '../shared/lib/date';
 
 export function AdminDashboard({ revision, navigate }) {
   const { data, loading, error, reload } = useResource('/portal/admin/dashboard', revision);
