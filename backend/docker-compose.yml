@@ -1,0 +1,47 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cerocolas_p1
+      POSTGRES_USER: cerocolas
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Define POSTGRES_PASSWORD in your environment}
+      TZ: America/Lima
+    volumes:
+      - cerocolas_p1_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cerocolas -d cerocolas_p1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+  prism:
+    image: stoplight/prism:5.16.0
+    command: mock -h 0.0.0.0 /contract/openapi.yaml
+    volumes:
+      - ../doccumentacion/apicitas/openapi.yaml:/contract/openapi.yaml:ro
+  api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      prism:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql+psycopg2://cerocolas:${POSTGRES_PASSWORD}@db:5432/cerocolas_p1
+      ENVIRONMENT: development
+      HOSPITAL_MODE: simulator
+      HOSPITAL_API_BASE_URL: http://prism:4010
+      HOSPITAL_CLIENT_ID: simulator
+      HOSPITAL_CLIENT_SECRET: simulator-only-not-a-real-secret
+      FRONTEND_URL: http://localhost:8000
+      CORS_ORIGINS: '["http://localhost:8000","http://127.0.0.1:8000"]'
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - cerocolas_p1_mail:/app/backend/.local/mailbox
+volumes:
+  cerocolas_p1_pgdata:
+  cerocolas_p1_mail:

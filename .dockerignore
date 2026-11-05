@@ -1,0 +1,9 @@
+.local
+**/.local
+**/.venv*
+**/node_modules
+**/__pycache__
+**/*.db
+**/.env
+**/.env.*
+frontend/dist

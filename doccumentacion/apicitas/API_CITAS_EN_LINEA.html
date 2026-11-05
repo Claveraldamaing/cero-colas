@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API Citas en Línea</title>
+<style>
+/* Layout: guía técnica de una columna (máx. 980px) con índice arriba; tablas y diagramas a todo
+   el ancho, texto corrido limitado a ~72 caracteres. Sin dependencias externas. */
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --surface-2: #eceff3; --fg: #18212b; --muted: #57636f;
+  --line: #c9d1da; --accent: #1f5fa8; --accent-soft: #e2ecf8;
+  --ok: #1d6b3c; --ok-soft: #ddf2e4; --warn: #8a5a00; --warn-soft: #fbedc9; --bad: #a3271f; --bad-soft: #fbe1de;
+  --sans: "Segoe UI", "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", "Cascadia Code", Consolas, "DejaVu Sans Mono", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #10161d; --surface: #18212b; --surface-2: #212c38; --fg: #e5ebf1; --muted: #9eabb8; --line: #364452;
+    --accent: #7fb2ec; --accent-soft: #1b2f47; --ok: #7ad69b; --ok-soft: #153324; --warn: #f0c060;
+    --warn-soft: #3a2d0e; --bad: #ff9a90; --bad-soft: #401a17; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #10161d; --surface: #18212b; --surface-2: #212c38; --fg: #e5ebf1; --muted: #9eabb8; --line: #364452;
+  --accent: #7fb2ec; --accent-soft: #1b2f47; --ok: #7ad69b; --ok-soft: #153324; --warn: #f0c060;
+  --warn-soft: #3a2d0e; --bad: #ff9a90; --bad-soft: #401a17; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 16px; line-height: 1.6; }
+.page { max-width: 980px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 72px; display: flex; flex-direction: column; gap: 52px; }
+section { display: flex; flex-direction: column; gap: 16px; min-width: 0; scroll-margin-top: 16px; }
+h1, h2, h3 { margin: 0; line-height: 1.2; text-wrap: balance; }
+h1 { font-size: 2rem; }
+h2 { font-size: 1.4rem; padding-bottom: 8px; border-bottom: 2px solid var(--line); }
+h3 { font-size: 1.05rem; }
+p { margin: 0; max-width: 72ch; }
+ul, ol { margin: 0; padding-left: 1.25rem; max-width: 72ch; display: flex; flex-direction: column; gap: 6px; }
+code { font-family: var(--mono); font-size: 0.85em; background: var(--surface-2); padding: 1px 5px; border-radius: 3px; overflow-wrap: anywhere; }
+a { color: var(--accent); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.eyebrow { font-size: 0.78rem; letter-spacing: 0.09em; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+.lead { font-size: 1.1rem; color: var(--muted); }
+.meta { font-size: 0.86rem; color: var(--muted); }
+header { display: flex; flex-direction: column; gap: 12px; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.9rem; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.callout { padding: 16px 20px; display: flex; flex-direction: column; gap: 8px; border-left: 5px solid var(--accent); background: var(--accent-soft); }
+.callout.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+.callout p, .callout ul { max-width: 80ch; }
+pre { margin: 0; font-family: var(--mono); font-size: 0.82rem; line-height: 1.5; background: var(--surface); border: 1px solid var(--line); padding: 14px 16px; overflow-x: auto; }
+.table-wrap { overflow-x: auto; border: 1px solid var(--line); background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; vertical-align: top; padding: 9px 11px; border-bottom: 1px solid var(--line); }
+thead th { background: var(--surface-2); font-size: 0.76rem; letter-spacing: 0.05em; text-transform: uppercase; }
+tbody tr:last-child td, tbody tr:last-child th { border-bottom: 0; }
+tr.group th { background: var(--surface-2); font-size: 0.82rem; letter-spacing: 0.04em; text-transform: uppercase; color: var(--accent); }
+td code { white-space: nowrap; }
+.wide { min-width: 820px; }
+.figure { background: var(--surface); border: 1px solid var(--line); overflow-x: auto; }
+.figure svg { display: block; width: 100%; height: auto; min-width: 760px; }
+.caption { font-size: 0.86rem; color: var(--muted); max-width: 80ch; }
+svg text { font-family: var(--sans); fill: var(--fg); font-size: 12px; }
+svg .sm { fill: var(--muted); font-size: 11px; }
+svg .lbl { font-size: 11px; paint-order: stroke; stroke: var(--surface); stroke-width: 5px; stroke-linejoin: round; }
+svg .zt { fill: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; }
+svg .n { fill: var(--surface-2); stroke: var(--line); stroke-width: 1.2; }
+svg .n-acc { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.6; }
+svg .zone { fill: none; stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 5 4; }
+svg .ln { fill: none; stroke: var(--fg); stroke-width: 1.4; }
+svg .ln-bad { fill: none; stroke: var(--bad); stroke-width: 1.6; stroke-dasharray: 4 3; }
+svg .life { stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 4 4; }
+svg .ret { stroke: var(--muted); stroke-width: 1.2; fill: none; stroke-dasharray: 5 3; }
+svg .head { fill: var(--fg); }
+svg .t-bad { fill: var(--bad); font-weight: 700; }
+.pill { display: inline-block; font-size: 0.74rem; font-weight: 700; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.pill.ok { background: var(--ok-soft); color: var(--ok); }
+.pill.warn { background: var(--warn-soft); color: var(--warn); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 22px 32px; }
+.cols > div { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.cols ul { font-size: 0.94rem; }
+.steps { list-style: none; padding: 0; counter-reset: s; max-width: none; gap: 0; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.steps li:last-child { border-bottom: 0; }
+.steps li::before { content: counter(s); font-family: var(--mono); font-weight: 700; color: var(--accent); font-size: 1.05rem; }
+.steps li > div { min-width: 0; }
+.steps .who { display: block; margin-bottom: 2px; font-size: 0.76rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.check li { list-style: none; position: relative; }
+.check { padding-left: 1.5rem; }
+.check li::before { content: "☐"; position: absolute; left: -1.4rem; color: var(--accent); }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="head" d="M0 0 L10 5 L0 10 z"/>
+    </marker>
+  </defs>
+</svg>
+
+<div class="page">
+
+<header>
+  <span class="eyebrow">Guía para el equipo desarrollador</span>
+  <h1>API de Citas en Línea — Consulta Externa SIS</h1>
+  <p class="lead">Todo lo necesario para construir la aplicación con la que los pacientes reservan sus citas. El contrato formal está en <code>openapi.yaml</code>, en esta misma carpeta. Esta guía explica cómo usarlo y qué reglas aplica el Hospital.</p>
+  <nav class="toc" aria-label="Contenido">
+    <a href="#empezar">Cómo empezar</a>
+    <a href="#arquitectura">Arquitectura</a>
+    <a href="#flujo">Flujo del paciente</a>
+    <a href="#reglas">Reglas</a>
+    <a href="#auth">Autenticación</a>
+    <a href="#rutas">Rutas</a>
+    <a href="#errores">Errores</a>
+    <a href="#robustez">Reintentos y límites</a>
+    <a href="#datos">Datos personales</a>
+    <a href="#auditoria">Auditoría</a>
+  </nav>
+</header>
+
+<section id="empezar">
+  <h2>Cómo empezar</h2>
+  <p>Por ahora no tendrán acceso a los servidores del Hospital. Se trabaja en tres etapas, y en cada una cambia solo la URL base:</p>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Etapa</th><th>URL base</th><th>Datos</th><th>Cuándo</th></tr></thead>
+      <tbody>
+        <tr><td><span class="pill ok">1 · Simulación</span></td><td><code>http://127.0.0.1:4010</code> (sin <code>/api/portal/v1</code>: Prism sirve las rutas en la raíz)</td><td>Ejemplos del contrato</td><td>Desde hoy</td></tr>
+        <tr><td><span class="pill warn">2 · Pruebas</span></td><td>La entrega el Hospital</td><td>Pacientes y agendas de prueba</td><td>Cuando el Hospital lo habilite</td></tr>
+        <tr><td><span class="pill bad">3 · Producción</span></td><td>La entrega el Hospital</td><td>Reales</td><td>Después de aprobar la auditoría</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3>Levantar la simulación</h3>
+<pre># Requiere Node.js 18 o superior
+npx @stoplight/prism-cli mock openapi.yaml
+
+# Prueba (Prism exige las mismas cabeceras que la API real; acepta cualquier token)
+curl -s http://127.0.0.1:4010/politicas \
+  -H "Authorization: Bearer prueba" \
+  -H "X-Request-Id: $(uuidgen)"</pre>
+  <p>Prism responde con los ejemplos del contrato y valida que las peticiones cumplan el formato: si falta una cabecera obligatoria responde <code>422</code>, y sin <code>Authorization</code> responde <code>401</code>, igual que hará la API real. Para forzar un ejemplo concreto, agregar la cabecera <code>Prefer: example=sinReferencia</code>. Para forzar un código de estado, <code>Prefer: code=409</code>.</p>
+</section>
+
+<section id="arquitectura">
+  <h2>Arquitectura obligatoria</h2>
+  <p>La aplicación del paciente nunca llama a la API del Hospital directamente. Siempre pasa por el backend de ustedes, que es el único que guarda las credenciales.</p>
+  <div class="figure">
+    <svg viewBox="0 0 900 220" role="img" aria-label="El navegador o app del paciente habla con el backend del equipo externo, y solo ese backend habla con la API del Hospital">
+      <rect class="zone" x="10" y="20" width="250" height="185"/>
+      <rect class="zone" x="280" y="20" width="300" height="185"/>
+      <rect class="zone" x="600" y="20" width="290" height="185"/>
+      <text class="zt" x="24" y="42">DISPOSITIVO DEL PACIENTE</text>
+      <text class="zt" x="294" y="42">SERVIDORES DEL EQUIPO EXTERNO</text>
+      <text class="zt" x="614" y="42">HOSPITAL</text>
+
+      <rect class="n" x="40" y="80" width="190" height="60"/>
+      <text x="135" y="105" text-anchor="middle">Web o app móvil</text>
+      <text class="sm" x="135" y="123" text-anchor="middle">sin credenciales del Hospital</text>
+
+      <rect class="n-acc" x="320" y="80" width="220" height="60"/>
+      <text x="430" y="105" text-anchor="middle">Backend de la aplicación</text>
+      <text class="sm" x="430" y="123" text-anchor="middle">guarda client_secret y tokens</text>
+
+      <rect class="n" x="640" y="80" width="210" height="60"/>
+      <text x="745" y="105" text-anchor="middle">API Citas en Línea</text>
+      <text class="sm" x="745" y="123" text-anchor="middle">/api/portal/v1</text>
+
+      <path class="ln" d="M230 110 H320" marker-end="url(#arr)"/>
+      <text class="lbl" x="275" y="102" text-anchor="middle">HTTPS</text>
+      <path class="ln" d="M540 110 H640" marker-end="url(#arr)"/>
+      <text class="lbl" x="590" y="102" text-anchor="middle">HTTPS + token</text>
+      <path class="ln-bad" d="M135 140 V178 H745 V140"/>
+      <text class="t-bad" x="440" y="173" text-anchor="middle">✕ nunca directo</text>
+    </svg>
+  </div>
+  <p class="caption">La API solo acepta peticiones desde las IP del backend de ustedes, que deben informarlas al Hospital. CORS está cerrado: una llamada desde un navegador será rechazada.</p>
+</section>
+
+<section id="flujo">
+  <h2>Flujo del paciente</h2>
+  <ol class="steps">
+    <li><div><span class="who">Backend · al iniciar y cada 15 minutos</span><code>POST /oauth/token</code> con <code>client_credentials</code>. Guardar el token en memoria del servidor.</div></li>
+    <li><div><span class="who">Paciente · identificarse</span>Ingresa DNI y fecha de nacimiento (el formulario debe tener CAPTCHA o una protección equivalente de ustedes). Backend: <code>POST /pacientes/identificacion</code> con la cabecera <code>X-Usuario-IP</code> → <code>paciente_token</code>, válido 15 minutos. Guardarlo en la sesión del servidor, nunca en el navegador. Si responde <code>IDENTIDAD_NO_VALIDA</code>, mostrar un solo mensaje para «no existe» y «fecha incorrecta».</div></li>
+    <li><div><span class="who">Backend · elegibilidad</span><code>GET /elegibilidad</code>, una vez por sesión. Si <code>elegible</code> es falso, mostrar el mensaje de cada motivo (tabla de errores) y terminar. Si es verdadero, aplicar la regla de vigencia de referencias que acuerden con Admisión usando <code>fecha_envio</code> (la API no la aplica) y ofrecer solo las especialidades que queden con alguna referencia válida.</div></li>
+    <li><div><span class="who">Paciente · especialidad y día</span>Elige una especialidad de la lista. Backend: <code>GET /especialidades/{id}/disponibilidad?mes=AAAA-MM</code> para pintar el calendario.</div></li>
+    <li><div><span class="who">Paciente · horario</span>Elige un día. Backend: <code>GET /especialidades/{id}/cupos?fecha=…</code>. Cada <code>cupo_id</code> vence en 10 minutos.</div></li>
+    <li><div><span class="who">Paciente · confirmar</span>Confirma el horario y su teléfono. Backend: <code>POST /citas</code> con una <code>Idempotency-Key</code> nueva. Responde <code>201</code>; si fue un reintento de una reserva ya hecha, también <code>201</code> con la misma cita y la cabecera <code>Idempotency-Replayed: true</code>. Si responde <code>CUPO_TOMADO</code>, volver al paso 5.</div></li>
+    <li><div><span class="who">Paciente · comprobante</span>Mostrar el <code>codigo_cita</code>, la <code>clave_anulacion</code>, la fecha, la hora, el consultorio y las <code>indicaciones</code> tal como llegan. La clave solo llega en esta respuesta: sin ella la cita solo se anula en ventanilla.</div></li>
+  </ol>
+</section>
+
+<section id="reglas">
+  <h2>Reglas que aplica el Hospital</h2>
+  <p>Todas se validan en la API. La aplicación puede mostrarlas para orientar al paciente, pero no hace falta repetirlas: si una no se cumple, la API responde con un código de error.</p>
+  <div class="cols">
+    <div>
+      <h3>Quién puede reservar</h3>
+      <ul>
+        <li>Pacientes ya registrados en el Hospital, con DNI y fecha de nacimiento que coincidan.</li>
+        <li>Con SIS vigente. Si el SIS no se puede verificar en ese momento, no se reserva.</li>
+        <li>Continuadores o reingresantes: con al menos una atención previa en el Hospital.</li>
+        <li>Con referencia en estado aceptada o recibida cuya especialidad coincida. La vigencia (días desde <code>fecha_envio</code>) la valida la aplicación de ustedes.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Qué se puede reservar</h3>
+      <ul>
+        <li>Solo especialidades programadas y habilitadas para el canal que estén en la elegibilidad del paciente.</li>
+        <li>Desde mañana hasta el último día del mes siguiente. Nunca fechas pasadas.</li>
+        <li>Cupos libres, que pueden ocuparse en ventanilla en cualquier momento.</li>
+        <li>Una reserva por día; después de reservar, 2 días (48 horas) de espera para la siguiente, aunque la haya anulado (<code>GET /politicas</code>). La fecha exacta llega en <code>proxima_reserva_desde</code>.</li>
+        <li>Una sola cita por consultorio y día de atención, y nunca dos citas del paciente que se crucen en horario.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Qué no hace este canal</h3>
+      <ul>
+        <li>No registra pacientes nuevos.</li>
+        <li>No atiende pacientes particulares ni otros seguros.</li>
+        <li>No genera el FUA: se genera el día de la atención.</li>
+        <li>No reprograma: se anula y se reserva otra vez.</li>
+        <li>No muestra diagnósticos ni historia clínica.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="auth">
+  <h2>Autenticación y cabeceras</h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Cabecera</th><th>Dónde</th><th>Qué es</th></tr></thead>
+      <tbody>
+        <tr><td><code>Authorization: Bearer …</code></td><td>Todas, menos <code>/oauth/token</code></td><td>Token de cliente. Dura 15 minutos y se renueva con <code>client_credentials</code>. No hay refresh token.</td></tr>
+        <tr><td><code>X-Paciente-Token</code></td><td>Rutas del paciente</td><td>Sesión del paciente, de <code>POST /pacientes/identificacion</code>. Dura 15 minutos y no se renueva: al vencer, el paciente vuelve a identificarse.</td></tr>
+        <tr><td><code>X-Usuario-IP</code></td><td><code>POST /pacientes/identificacion</code></td><td>IP pública del paciente. El Hospital solo ve la IP del servidor de ustedes, así que los límites por persona dependen de este valor. Enviarla tal cual, sin inventarla.</td></tr>
+        <tr><td><code>X-Request-Id</code></td><td>Todas, menos <code>/oauth/token</code></td><td>UUID por petición. Guardarlo en sus logs: es lo que el Hospital pedirá para revisar un caso.</td></tr>
+        <tr><td><code>Idempotency-Key</code></td><td><code>POST /citas</code> y anulación</td><td>UUID por intento de operación. Repetirlo en los reintentos de esa misma operación.</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>El Hospital entrega un <code>client_id</code> y un <code>client_secret</code> por ambiente. Los de pruebas no sirven en producción. Si un secreto se filtra, avisar de inmediato: el Hospital lo revoca y entrega otro.</p>
+  <p>Permisos (<code>scope</code>): <code>portal.leer</code> para consultar y <code>portal.citar</code> para reservar y anular.</p>
+</section>
+
+<section id="rutas">
+  <h2>Rutas</h2>
+  <p>Base <code>/api/portal/v1</code>. Los esquemas completos, con ejemplos, están en <code>openapi.yaml</code>.</p>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>Ruta</th><th>Paciente</th><th>Permiso</th><th>Para qué</th></tr></thead>
+      <tbody>
+        <tr><td><code>POST /oauth/token</code></td><td>—</td><td>—</td><td>Token de cliente</td></tr>
+        <tr><td><code>GET /salud</code></td><td>—</td><td>leer</td><td>Saber si el canal está abierto antes de ofrecerlo</td></tr>
+        <tr><td><code>GET /politicas</code></td><td>—</td><td>leer</td><td>Ventana de fechas, reservas por día, días de espera, intentos</td></tr>
+        <tr><td><code>GET /catalogos/motivos-anulacion</code></td><td>—</td><td>leer</td><td>Opciones para anular</td></tr>
+        <tr><td><code>POST /pacientes/identificacion</code></td><td>—</td><td>leer</td><td>DNI + fecha de nacimiento → <code>paciente_token</code></td></tr>
+        <tr><td><code>GET /elegibilidad</code></td><td>Sí</td><td>leer</td><td>SIS, referencias y especialidades permitidas</td></tr>
+        <tr><td><code>GET /especialidades/{id}/disponibilidad</code></td><td>Sí</td><td>leer</td><td>Calendario del mes</td></tr>
+        <tr><td><code>GET /especialidades/{id}/cupos</code></td><td>Sí</td><td>leer</td><td>Horarios libres de un día</td></tr>
+        <tr><td><code>POST /citas</code></td><td>Sí</td><td>citar</td><td>Reservar</td></tr>
+        <tr><td><code>GET /citas</code></td><td>Sí</td><td>leer</td><td>Citas futuras del paciente</td></tr>
+        <tr><td><code>GET /citas/{codigo}</code></td><td>Sí</td><td>leer</td><td>Detalle</td></tr>
+        <tr><td><code>POST /citas/{codigo}/anulacion</code></td><td>Sí</td><td>citar</td><td>Anular una cita reservada en línea, con su <code>clave_anulacion</code></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Todos los identificadores que devuelve la API (<code>especialidad_id</code>, <code>referencia_id</code>, <code>cupo_id</code>) son opacos. No hay que interpretarlos ni construirlos: se usan tal como llegan.</p>
+  <ul>
+    <li>Fechas y horas en hora de Perú (<code>America/Lima</code>, UTC−5). «Día» es siempre un día calendario en esa zona.</li>
+    <li>La aplicación debe ignorar los campos que no conozca y tolerar valores nuevos en <code>codigo</code> de error, <code>motivos</code> y <code>estado</code> de una cita: ante un código o motivo desconocido, mostrar un mensaje genérico con el <code>rastreo</code>; ante un estado desconocido, mostrarlo tal cual y no ofrecer anular. Si generan código desde <code>openapi.yaml</code>, configurar el generador para que estos <code>enum</code> no fallen con valores nuevos.</li>
+    <li>Las reglas de <code>GET /politicas</code> las ajusta el Hospital: leerlas, no fijarlas en el código.</li>
+  </ul>
+</section>
+
+<section id="errores">
+  <h2>Errores</h2>
+  <p>Siempre tienen la misma forma. La aplicación decide qué hacer según <code>codigo</code>, nunca según el texto.</p>
+<pre>{
+  "codigo": "CUPO_TOMADO",
+  "mensaje": "Ese horario acaba de ser reservado. Elige otro.",
+  "rastreo": "c1f9e0a2"
+}</pre>
+  <div class="table-wrap">
+    <table class="wide">
+      <thead><tr><th>Código</th><th>HTTP</th><th>Qué significa</th><th>Qué debe hacer la aplicación</th></tr></thead>
+      <tbody>
+        <tr class="group"><th colspan="4">Acceso</th></tr>
+        <tr><td><code>NO_AUTORIZADO</code></td><td>401</td><td>Token de cliente ausente, vencido o sin permiso</td><td>Pedir otro token una vez. Si persiste, alertar a su equipo.</td></tr>
+        <tr><td><code>DEMASIADAS_SOLICITUDES</code></td><td>429</td><td>Se superó el límite</td><td>Esperar <code>Retry-After</code>. No reintentar en bucle.</td></tr>
+        <tr><td><code>CANAL_CERRADO</code></td><td>503</td><td>El Hospital cerró el canal (mantenimiento, fin de mes)</td><td>Mostrar «Las citas en línea no están disponibles en este momento».</td></tr>
+        <tr><td><code>SERVICIO_NO_DISPONIBLE</code></td><td>503</td><td>Falla temporal</td><td>Ofrecer reintentar más tarde.</td></tr>
+        <tr class="group"><th colspan="4">Identidad</th></tr>
+        <tr><td><code>DATOS_INVALIDOS</code></td><td>422</td><td>Formato incorrecto; <code>errores</code> dice qué campo</td><td>Marcar el campo.</td></tr>
+        <tr><td><code>IDENTIDAD_NO_VALIDA</code></td><td>401</td><td>El DNI no existe en el Hospital o la fecha de nacimiento no coincide</td><td>«No encontramos un paciente con esos datos». Mismo mensaje en ambos casos.</td></tr>
+        <tr><td><code>IDENTIDAD_BLOQUEADA</code></td><td>423</td><td>5 intentos fallidos con ese DNI en 30 minutos</td><td>«Por seguridad, espera 30 minutos o acércate a Admisión».</td></tr>
+        <tr><td><code>SESION_PACIENTE_INVALIDA</code></td><td>401</td><td>Pasaron los 15 minutos de sesión</td><td>Volver a identificar al paciente (paso 2).</td></tr>
+        <tr class="group"><th colspan="4">Elegibilidad (vienen en <code>motivos</code> de <code>GET /elegibilidad</code>)</th></tr>
+        <tr><td><code>SIS_NO_VIGENTE</code></td><td>—</td><td>No tiene SIS activo, o vence antes de la ventana</td><td>«Tu SIS no está vigente. Acércate a Admisión».</td></tr>
+        <tr><td><code>SIS_NO_VERIFICABLE</code></td><td>—</td><td>No se pudo consultar el SIS en este momento</td><td>«No pudimos confirmar tu SIS. Intenta más tarde».</td></tr>
+        <tr><td><code>PACIENTE_NUEVO</code></td><td>—</td><td>No tiene atenciones previas en el Hospital</td><td>«Para tu primera atención acércate a Admisión».</td></tr>
+        <tr><td><code>SIN_REFERENCIA</code></td><td>—</td><td>No tiene referencia aceptada o recibida que coincida con alguna especialidad</td><td>«Necesitas una referencia de tu establecimiento».</td></tr>
+        <tr><td><code>SIN_ESPECIALIDADES_PROGRAMADAS</code></td><td>—</td><td>Sus especialidades no tienen agenda en la ventana</td><td>«Aún no hay horarios disponibles para tu especialidad».</td></tr>
+        <tr><td><code>ESPERA_ENTRE_RESERVAS</code></td><td>— / 409</td><td>Reservó hace menos de 2 días</td><td>«Podrás reservar otra vez desde …» con <code>proxima_reserva_desde</code>.</td></tr>
+        <tr><td><code>PACIENTE_SUSPENDIDO</code></td><td>— / 403</td><td>Suspendido por inasistencias</td><td>«Por inasistencias anteriores, reserva en Admisión».</td></tr>
+        <tr class="group"><th colspan="4">Reserva</th></tr>
+        <tr><td><code>NO_ELEGIBLE</code></td><td>403</td><td>Al reservar, el paciente ya no cumple la elegibilidad (por ejemplo, su SIS cambió)</td><td>Llamar otra vez a <code>GET /elegibilidad</code> y mostrar los motivos.</td></tr>
+        <tr><td><code>ESPECIALIDAD_NO_PERMITIDA</code></td><td>403</td><td>La especialidad no está en su elegibilidad</td><td>Volver a la lista de especialidades.</td></tr>
+        <tr><td><code>CUPO_INVALIDO</code></td><td>422</td><td><code>cupo_id</code> vencido o alterado</td><td>Pedir los cupos otra vez.</td></tr>
+        <tr><td><code>CUPO_TOMADO</code></td><td>409</td><td>Otro paciente o la ventanilla lo tomó primero</td><td>Pedir los cupos otra vez y que elija otro.</td></tr>
+        <tr><td><code>FUERA_DE_VENTANA</code></td><td>422</td><td>Fecha fuera de lo permitido</td><td>Usar las fechas de <code>GET /politicas</code>.</td></tr>
+        <tr><td><code>REFERENCIA_NO_VALIDA</code></td><td>422</td><td>La referencia no es del paciente, cambió de estado o no corresponde a la especialidad</td><td>Pedir elegibilidad otra vez.</td></tr>
+        <tr><td><code>SERVICIO_NO_ATIENDE</code></td><td>422</td><td>El consultorio no atiende por sexo o edad</td><td>Elegir otro horario o consultorio.</td></tr>
+        <tr><td><code>CRUCE_HORARIO</code></td><td>409</td><td>Ya tiene otra cita a esa hora</td><td>Elegir otra hora.</td></tr>
+        <tr><td><code>YA_TIENE_CITA_ESE_DIA</code></td><td>409</td><td>Ya tiene cita en ese consultorio ese día</td><td>Elegir otro día.</td></tr>
+        <tr><td><code>IDEMPOTENCIA_CONFLICTO</code></td><td>409</td><td>Misma <code>Idempotency-Key</code> con otro contenido</td><td>Error de programación: generar una clave nueva por operación.</td></tr>
+        <tr class="group"><th colspan="4">Consulta y anulación</th></tr>
+        <tr><td><code>CITA_NO_ENCONTRADA</code></td><td>404</td><td>No existe o no es del paciente</td><td>Refrescar la lista.</td></tr>
+        <tr><td><code>CLAVE_ANULACION_INVALIDA</code></td><td>403</td><td>La clave no corresponde a la cita</td><td>Pedir la clave otra vez. Quedan pocos intentos: no ofrecer reintentos automáticos.</td></tr>
+        <tr><td><code>ANULACION_SOLO_EN_VENTANILLA</code></td><td>403</td><td>La cita se sacó en ventanilla, o ya hubo 5 intentos fallidos de clave</td><td>«Para anular esta cita, acércate a Admisión». No volver a ofrecer anular.</td></tr>
+        <tr><td><code>FUERA_DE_PLAZO</code></td><td>409</td><td>Falta menos de lo permitido para anular</td><td>«Para anular, comunícate con Admisión».</td></tr>
+        <tr><td><code>CITA_EN_ATENCION</code></td><td>409</td><td>Ya tiene triaje o atención</td><td>No ofrecer anular.</td></tr>
+        <tr><td><code>CITA_YA_ANULADA</code></td><td>409</td><td>Ya estaba anulada</td><td>Refrescar la lista.</td></tr>
+        <tr><td><code>ERROR_INTERNO</code></td><td>500</td><td>Falla del Hospital</td><td>Mostrar <code>rastreo</code> y sugerir intentar más tarde.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="robustez">
+  <h2>Reintentos, tiempos y límites</h2>
+  <div class="cols">
+    <div>
+      <h3>Reintentos</h3>
+      <ul>
+        <li>Reintentar solo ante corte de red, <code>500</code> o <code>503</code>: como máximo 2 veces, con espera de 1 y 3 segundos.</li>
+        <li>En <code>POST /citas</code>, repetir la <strong>misma</strong> <code>Idempotency-Key</code>. Así nunca se crean dos citas.</li>
+        <li>Nunca reintentar <code>4xx</code> sin cambiar algo.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Tiempos</h3>
+      <ul>
+        <li>Timeout recomendado: 15 segundos. La elegibilidad puede tardar más que el resto porque consulta servicios del Estado.</li>
+        <li>Token de cliente y sesión del paciente: 15 minutos.</li>
+        <li><code>cupo_id</code>: 10 minutos.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Límites (por cliente)</h3>
+      <ul>
+        <li>60 peticiones por minuto en total.</li>
+        <li>Identificación: 5 fallidos por DNI cada 30 minutos y 20 intentos por <code>X-Usuario-IP</code> cada hora.</li>
+        <li>Al superarlos: <code>429</code> con <code>Retry-After</code>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="datos">
+  <h2>Datos personales</h2>
+  <div class="callout warn">
+    <p>Los datos de salud son datos sensibles según la Ley 29733 de Protección de Datos Personales. La historia del paciente queda siempre en el Hospital; la aplicación solo muestra y reserva, y debe guardar lo mínimo.</p>
+  </div>
+  <div class="cols">
+    <div>
+      <h3>Pueden guardar</h3>
+      <ul>
+        <li><code>codigo_cita</code>, <code>clave_anulacion</code> y el resumen de la cita, para mostrárselos al paciente. La clave, solo asociada a la cuenta del paciente en su aplicación.</li>
+        <li><code>X-Request-Id</code>, códigos de error y tiempos de respuesta.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>No pueden guardar</h3>
+      <ul>
+        <li>DNI ni fecha de nacimiento, más allá de la sesión.</li>
+        <li><code>paciente_token</code> ni tokens de cliente, fuera de la memoria del servidor.</li>
+        <li>Nada de lo anterior en logs, analítica o herramientas de terceros.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Deben mostrar</h3>
+      <ul>
+        <li>Política de privacidad aprobada por el Hospital.</li>
+        <li>Aceptación del paciente antes de enviar su DNI.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section id="auditoria">
+  <h2>Auditoría antes de producción</h2>
+  <p>El Hospital revisará el código y la configuración antes de entregar las credenciales de producción. Conviene cumplir esta lista desde el inicio.</p>
+  <div class="cols">
+    <div>
+      <h3>Secretos</h3>
+      <ul class="check">
+        <li><code>client_secret</code> solo en variables de entorno o un gestor de secretos</li>
+        <li>Ningún secreto en el repositorio, ni en su historial de git</li>
+        <li>Ningún secreto ni token en el código del navegador o de la app móvil</li>
+        <li>Procedimiento escrito para rotar un secreto</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Web y servidor</h3>
+      <ul class="check">
+        <li>HTTPS con HSTS; cookies <code>Secure</code>, <code>HttpOnly</code> y <code>SameSite</code></li>
+        <li>CSP sin <code>unsafe-inline</code>; protección CSRF</li>
+        <li>CAPTCHA o protección equivalente en el formulario de identificación</li>
+        <li>Límite de peticiones propio por IP, y <code>X-Usuario-IP</code> enviado con la IP real</li>
+        <li>Regla de vigencia de referencias implementada como la definió Admisión</li>
+        <li>Dependencias sin vulnerabilidades conocidas (<code>npm audit</code> o equivalente en CI)</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Uso de la API</h3>
+      <ul class="check">
+        <li>Todas las llamadas desde el backend</li>
+        <li><code>Idempotency-Key</code> por operación, reutilizada en los reintentos</li>
+        <li>Cada código de error manejado con un mensaje claro</li>
+        <li>Sin reintentos en bucle ante <code>429</code> o <code>503</code></li>
+        <li><code>X-Request-Id</code> registrado en sus logs</li>
+      </ul>
+    </div>
+    <div>
+      <h3>Entregables</h3>
+      <ul class="check">
+        <li>Acceso de lectura al repositorio</li>
+        <li>Lista de dependencias con versiones</li>
+        <li>Diagrama de despliegue y lista de IP de salida</li>
+        <li>Ejemplo de logs, para confirmar que no traen datos personales</li>
+        <li>Contacto técnico para incidentes</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</div>
+</body>
+</html>

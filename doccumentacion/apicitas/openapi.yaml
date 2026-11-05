@@ -1,0 +1,1181 @@
+openapi: 3.0.3
+info:
+  title: API de Citas en Línea — Consulta Externa SIS
+  version: 1.0.0
+  description: |
+    API que el Hospital expone para que una aplicación de terceros permita a pacientes
+    **asegurados al SIS**, **continuadores o reingresantes**, reservar citas de Consulta Externa.
+
+    Reglas que esta API aplica en el servidor (la aplicación cliente no puede saltarlas):
+    - El paciente debe tener al menos una atención previa en el Hospital (continuador o reingresante).
+      Se identifica con DNI y fecha de nacimiento.
+    - Debe tener SIS vigente. Si el SIS no se puede verificar en ese momento, no se reserva.
+    - Debe tener una referencia en estado ACEPTADA o RECIBIDA cuya especialidad coincida con la que reserva.
+      La API entrega la fecha de envío de cada referencia **sin juzgar su vigencia**: la regla de
+      vigencia la aplica la aplicación cliente y se revisa en la auditoría.
+    - Solo se ofrecen especialidades programadas y habilitadas para el canal, desde mañana hasta el
+      último día del mes siguiente.
+    - Una reserva por día, y después de reservar hay que esperar 2 días para la siguiente
+      (ver `GET /politicas`). Una cita anulada no reinicia la espera.
+    - El FUA no se genera al reservar: se genera el día de la atención.
+
+    Toda petición requiere un token de cliente (`POST /oauth/token`). Las rutas que operan sobre un
+    paciente requieren además la cabecera `X-Paciente-Token`, que se obtiene en `POST /pacientes/identificacion`.
+
+    **Compatibilidad hacia adelante.** La aplicación debe tolerar valores que no conoce: campos nuevos
+    en una respuesta, y valores nuevos en `Error.codigo`, `Elegibilidad.motivos` y `Cita.estado`.
+    Ante un código desconocido, mostrar un mensaje genérico con el `rastreo`.
+
+    Fechas y horas en hora de Perú (`America/Lima`, UTC−5). «Día» siempre es un día calendario en esa zona.
+
+    Usar con un servidor de simulación (Prism) hasta que el Hospital entregue la URL del ambiente
+    de pruebas.
+  contact:
+    name: Unidad de Informática — Hospital (equipo Pakamuros)
+servers:
+  - url: http://127.0.0.1:4010
+    description: |
+      Simulación local (Prism) — `npx @stoplight/prism-cli mock openapi.yaml`.
+      Prism sirve las rutas en la raíz, sin el prefijo `/api/portal/v1`.
+  - url: https://pruebas.ejemplo-hospital.invalid/api/portal/v1
+    description: Ambiente de pruebas (URL definitiva la entrega el Hospital)
+  - url: https://citas.ejemplo-hospital.invalid/api/portal/v1
+    description: Producción (URL definitiva la entrega el Hospital)
+
+security:
+  - clienteOAuth: []
+
+tags:
+  - name: Acceso
+    description: Token del cliente (servidor a servidor).
+  - name: Identidad
+    description: Identificación del paciente con DNI y fecha de nacimiento.
+  - name: Elegibilidad
+    description: SIS, referencias y especialidades que el paciente puede reservar.
+  - name: Disponibilidad
+    description: Días y cupos libres.
+  - name: Citas
+    description: Reservar, consultar y anular.
+  - name: Catálogos
+    description: Datos de apoyo y reglas vigentes.
+
+paths:
+  /oauth/token:
+    post:
+      operationId: obtenerTokenCliente
+      tags: [Acceso]
+      summary: Obtener token de cliente
+      description: |
+        Flujo OAuth 2.0 *client credentials*. Se llama **desde el servidor** de la aplicación
+        cliente, nunca desde el navegador o la app móvil. El token dura 15 minutos.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type, client_id, client_secret, scope]
+              properties:
+                grant_type:
+                  type: string
+                  enum: [client_credentials]
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+                  format: password
+                scope:
+                  type: string
+                  description: Separados por espacio.
+                  example: portal.leer portal.citar
+      responses:
+        '200':
+          description: Token emitido.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenCliente'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '429':
+          $ref: '#/components/responses/DemasiadasSolicitudes'
+
+  /salud:
+    get:
+      operationId: consultarSalud
+      tags: [Catálogos]
+      summary: Estado del servicio
+      description: Indica si el canal está abierto y si las dependencias responden.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Estado actual.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Salud'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '429':
+          $ref: '#/components/responses/DemasiadasSolicitudes'
+
+  /politicas:
+    get:
+      operationId: consultarPoliticas
+      tags: [Catálogos]
+      summary: Reglas vigentes del canal
+      description: |
+        Valores que el Hospital puede ajustar en cualquier momento.
+        Conviene leerlos al iniciar y mostrarlos al paciente; la API los aplica igual.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Reglas vigentes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Politicas'
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '429':
+          $ref: '#/components/responses/DemasiadasSolicitudes'
+
+  /catalogos/motivos-anulacion:
+    get:
+      operationId: listarMotivosAnulacion
+      tags: [Catálogos]
+      summary: Motivos para anular una cita
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+      responses:
+        '200':
+          description: Lista de motivos.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  datos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MotivoAnulacion'
+              example:
+                datos:
+                  - motivo_id: '1'
+                    descripcion: Ya no necesito la cita
+                  - motivo_id: '2'
+                    descripcion: No puedo asistir en esa fecha
+                  - motivo_id: '3'
+                    descripcion: Me atenderé en otro establecimiento
+        '401':
+          $ref: '#/components/responses/NoAutorizado'
+        '429':
+          $ref: '#/components/responses/DemasiadasSolicitudes'
+
+  /pacientes/identificacion:
+    post:
+      operationId: identificarPaciente
+      tags: [Identidad]
+      summary: Identificar al paciente
+      description: |
+        Identifica al paciente con su DNI y su fecha de nacimiento, comparados con los datos que
+        el Hospital ya tiene registrados. Si coinciden, entrega
+        el `paciente_token` (15 minutos).
+
+        **La respuesta de error es la misma si el DNI no existe o si la fecha no coincide**
+        (`IDENTIDAD_NO_VALIDA`). Tras 5 intentos fallidos con el mismo DNI en 30 minutos, ese DNI
+        queda bloqueado 30 minutos (`IDENTIDAD_BLOQUEADA`), exista o no.
+
+        La cabecera `X-Usuario-IP` es obligatoria: el Hospital solo ve la IP del servidor de la
+        aplicación cliente, así que los límites por persona se calculan con este valor.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/UsuarioIP'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitudIdentificacion'
+      responses:
+        '200':
+          description: Paciente identificado.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SesionPaciente'
+        '401':
+          description: '`IDENTIDAD_NO_VALIDA`: el DNI no existe en el Hospital o la fecha no coincide.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                codigo: IDENTIDAD_NO_VALIDA
+                mensaje: No encontramos un paciente con esos datos. Revisa el DNI y la fecha de nacimiento.
+                rastreo: 7f3a91c2
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+        '423':
+          description: '`IDENTIDAD_BLOQUEADA`: demasiados intentos fallidos con ese DNI. Ver `Retry-After`.'
+          headers:
+            Retry-After:
+              schema:
+                type: integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                codigo: IDENTIDAD_BLOQUEADA
+                mensaje: Por seguridad, espera 30 minutos o acércate a Admisión.
+                rastreo: 2d7a4f90
+        '429':
+          $ref: '#/components/responses/DemasiadasSolicitudes'
+        '503':
+          $ref: '#/components/responses/NoDisponible'
+
+  /elegibilidad:
+    get:
+      operationId: consultarElegibilidad
+      tags: [Elegibilidad]
+      summary: Qué puede reservar el paciente
+      description: |
+        Verifica SIS, condición (continuador o reingresante), referencias y la espera entre
+        reservas, y devuelve las especialidades que el paciente puede reservar. El resultado queda
+        guardado en la sesión del paciente: llamarlo una vez por sesión.
+
+        `referencias` trae los datos tal como vienen de REFCON (número, estado, fecha de envío,
+        especialidad de destino) más las especialidades del Hospital con las que coinciden. La API
+        **no** decide si una referencia está vencida: esa regla la aplica la aplicación cliente.
+
+        Si `elegible` es `false`, `motivos` explica por qué. Si el SIS no se pudo verificar en
+        este momento, el motivo es `SIS_NO_VERIFICABLE` y no se puede reservar.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/PacienteToken'
+      responses:
+        '200':
+          description: Resultado de la evaluación.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Elegibilidad'
+              examples:
+                elegible:
+                  $ref: '#/components/examples/ElegibilidadOk'
+                sinReferencia:
+                  $ref: '#/components/examples/ElegibilidadSinReferencia'
+                enEspera:
+                  $ref: '#/components/examples/ElegibilidadEnEspera'
+                sisNoVerificable:
+                  $ref: '#/components/examples/ElegibilidadSisNoVerificable'
+        '401':
+          $ref: '#/components/responses/SesionPacienteInvalida'
+
+  /especialidades/{especialidad_id}/disponibilidad:
+    get:
+      operationId: consultarDisponibilidad
+      tags: [Disponibilidad]
+      summary: Días con cupos libres
+      description: Calendario de la especialidad dentro de la ventana permitida.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/PacienteToken'
+        - $ref: '#/components/parameters/EspecialidadId'
+        - name: mes
+          in: query
+          required: false
+          description: Mes a consultar (`AAAA-MM`). Por defecto, el mes actual.
+          schema:
+            type: string
+            pattern: '^[0-9]{4}-[0-9]{2}$'
+            example: '2026-11'
+      responses:
+        '200':
+          description: Días del mes con su disponibilidad.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  datos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DiaDisponible'
+        '401':
+          $ref: '#/components/responses/SesionPacienteInvalida'
+        '403':
+          $ref: '#/components/responses/EspecialidadNoPermitida'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /especialidades/{especialidad_id}/cupos:
+    get:
+      operationId: listarCupos
+      tags: [Disponibilidad]
+      summary: Cupos libres de un día
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/PacienteToken'
+        - $ref: '#/components/parameters/EspecialidadId'
+        - name: fecha
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+            example: '2026-11-04'
+      responses:
+        '200':
+          description: Cupos libres en ese momento. Un cupo puede ocuparse antes de reservarlo.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  datos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Cupo'
+        '401':
+          $ref: '#/components/responses/SesionPacienteInvalida'
+        '403':
+          $ref: '#/components/responses/EspecialidadNoPermitida'
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+
+  /citas:
+    get:
+      operationId: listarCitas
+      tags: [Citas]
+      summary: Citas futuras del paciente
+      description: Incluye las reservadas por este canal y las sacadas en ventanilla.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/PacienteToken'
+      responses:
+        '200':
+          description: Lista de citas.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  datos:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Cita'
+        '401':
+          $ref: '#/components/responses/SesionPacienteInvalida'
+    post:
+      tags: [Citas]
+      summary: Reservar una cita
+      description: |
+        Reserva el cupo indicado. Usar una `Idempotency-Key` nueva por cada intento de reserva y
+        **repetir la misma** si hay que reintentar por un corte de red: la API devuelve la misma
+        cita en lugar de crear otra.
+      operationId: reservarCita
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/PacienteToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitudCita'
+      responses:
+        '201':
+          description: |
+            Cita creada. Es la **única** respuesta que trae `clave_anulacion`: la aplicación debe
+            mostrársela al paciente y guardarla, porque sin ella la cita solo se anula en ventanilla.
+
+            Si se repite la misma `Idempotency-Key` con el mismo cuerpo, la respuesta es otra vez
+            `201` con la misma cita y la misma `clave_anulacion`, y la cabecera
+            `Idempotency-Replayed: true`.
+          headers:
+            Idempotency-Replayed:
+              description: '`true` si la respuesta es la de una reserva ya hecha con esa misma clave.'
+              schema:
+                type: boolean
+                example: false
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CitaCreada'
+              example:
+                codigo_cita: CE-26-7Q4M2K
+                estado: RESERVADA
+                canal: EN_LINEA
+                fecha: '2026-11-04'
+                hora_inicio: '08:20'
+                hora_fin: '08:40'
+                especialidad: TRAUMATOLOGÍA Y ORTOPEDIA
+                consultorio: TRAUMATOLOGÍA 1
+                medico: DR. PÉREZ GÓMEZ, LUIS
+                financiamiento: SIS
+                indicaciones:
+                  - Llegar 30 minutos antes a Admisión con tu DNI.
+                  - Traer tu hoja de referencia.
+                  - Guardar la clave de anulación que te dio la aplicación.
+                anulable_hasta: '2026-11-03T08:20:00-05:00'
+                clave_anulacion: K7P2QX
+        '401':
+          $ref: '#/components/responses/SesionPacienteInvalida'
+        '403':
+          description: El paciente no puede reservar (`NO_ELEGIBLE`, `PACIENTE_SUSPENDIDO`, `ESPECIALIDAD_NO_PERMITIDA`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                codigo: NO_ELEGIBLE
+                mensaje: En este momento no puedes reservar en línea. Consulta tu elegibilidad.
+                rastreo: 5d20a7b3
+        '409':
+          description: |
+            Conflicto: `CUPO_TOMADO`, `ESPERA_ENTRE_RESERVAS` (ver `proxima_reserva_desde` en
+            la elegibilidad), `CRUCE_HORARIO`, `YA_TIENE_CITA_ESE_DIA`, `IDEMPOTENCIA_CONFLICTO`
+            (misma clave con otro contenido).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                codigo: CUPO_TOMADO
+                mensaje: Ese horario acaba de ser reservado. Elige otro.
+                rastreo: c1f9e0a2
+        '422':
+          description: |
+            Datos inválidos o regla de negocio: `DATOS_INVALIDOS`, `CUPO_INVALIDO`,
+            `FUERA_DE_VENTANA`, `REFERENCIA_NO_VALIDA`, `SERVICIO_NO_ATIENDE`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                codigo: CUPO_INVALIDO
+                mensaje: El horario elegido ya no es válido. Vuelve a elegirlo.
+                rastreo: 9a61c0de
+        '429':
+          $ref: '#/components/responses/DemasiadasSolicitudes'
+        '503':
+          $ref: '#/components/responses/NoDisponible'
+
+  /citas/{codigo_cita}:
+    get:
+      operationId: obtenerCita
+      tags: [Citas]
+      summary: Detalle de una cita
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/PacienteToken'
+        - $ref: '#/components/parameters/CodigoCita'
+      responses:
+        '200':
+          description: Cita.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cita'
+        '401':
+          $ref: '#/components/responses/SesionPacienteInvalida'
+        '404':
+          $ref: '#/components/responses/CitaNoEncontrada'
+
+  /citas/{codigo_cita}/anulacion:
+    post:
+      operationId: anularCita
+      tags: [Citas]
+      summary: Anular una cita reservada por este canal
+      description: |
+        Solo citas creadas por este canal, con la anticipación mínima de `GET /politicas` y con la
+        `clave_anulacion` que se entregó al reservar. Con solo el DNI y la fecha de nacimiento no se
+        puede anular la cita de otra persona.
+
+        Una cita sacada en ventanilla, o una cita con 5 intentos fallidos de clave, responde
+        `ANULACION_SOLO_EN_VENTANILLA`. Repetir la misma `Idempotency-Key` devuelve la misma
+        respuesta que el primer intento.
+      parameters:
+        - $ref: '#/components/parameters/RequestId'
+        - $ref: '#/components/parameters/PacienteToken'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/CodigoCita'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [clave_anulacion, motivo_id]
+              properties:
+                clave_anulacion:
+                  type: string
+                  pattern: '^[A-Z0-9]{6}$'
+                  example: K7P2QX
+                motivo_id:
+                  type: string
+                  description: De `GET /catalogos/motivos-anulacion`.
+                comentario:
+                  type: string
+                  maxLength: 200
+      responses:
+        '200':
+          description: Cita anulada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cita'
+              example:
+                codigo_cita: CE-26-7Q4M2K
+                estado: ANULADA
+                canal: EN_LINEA
+                fecha: '2026-11-04'
+                hora_inicio: '08:20'
+                hora_fin: '08:40'
+                especialidad: TRAUMATOLOGÍA Y ORTOPEDIA
+                consultorio: TRAUMATOLOGÍA 1
+                medico: DR. PÉREZ GÓMEZ, LUIS
+                financiamiento: SIS
+                indicaciones: []
+                anulable_hasta: null
+        '401':
+          $ref: '#/components/responses/SesionPacienteInvalida'
+        '404':
+          $ref: '#/components/responses/CitaNoEncontrada'
+        '409':
+          description: '`FUERA_DE_PLAZO`, `CITA_EN_ATENCION` o `CITA_YA_ANULADA`.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                codigo: FUERA_DE_PLAZO
+                mensaje: Para anular, comunícate con Admisión.
+                rastreo: 91be3c07
+        '403':
+          description: |
+            `CLAVE_ANULACION_INVALIDA`: la clave no corresponde. Tras 5 intentos fallidos la respuesta pasa a
+            ser `ANULACION_SOLO_EN_VENTANILLA`, que también es la respuesta para citas sacadas en ventanilla.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                codigo: CLAVE_ANULACION_INVALIDA
+                mensaje: La clave de anulación no es correcta.
+                rastreo: 47d2e8b1
+        '422':
+          $ref: '#/components/responses/DatosInvalidos'
+        '429':
+          $ref: '#/components/responses/DemasiadasSolicitudes'
+
+components:
+  securitySchemes:
+    clienteOAuth:
+      type: oauth2
+      description: Token de cliente. Solo desde el servidor de la aplicación cliente.
+      flows:
+        clientCredentials:
+          tokenUrl: /api/portal/v1/oauth/token
+          scopes:
+            portal.leer: Consultar elegibilidad, disponibilidad y citas.
+            portal.citar: Reservar y anular citas.
+
+  parameters:
+    RequestId:
+      name: X-Request-Id
+      in: header
+      required: true
+      description: UUID generado por el cliente para cada petición. Se usa para rastrear incidencias.
+      schema:
+        type: string
+        format: uuid
+    PacienteToken:
+      name: X-Paciente-Token
+      in: header
+      required: true
+      description: Token del paciente obtenido en `POST /pacientes/identificacion`. Vence en 15 minutos.
+      schema:
+        type: string
+    UsuarioIP:
+      name: X-Usuario-IP
+      in: header
+      required: true
+      description: IP pública del paciente tal como la ve el servidor de la aplicación cliente.
+      schema:
+        type: string
+        example: 190.42.17.88
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: UUID único por intento de operación. Reutilizarlo en los reintentos.
+      schema:
+        type: string
+        format: uuid
+    EspecialidadId:
+      name: especialidad_id
+      in: path
+      required: true
+      description: Identificador opaco devuelto por `GET /elegibilidad`.
+      schema:
+        type: string
+        example: es_8KQ2
+    CodigoCita:
+      name: codigo_cita
+      in: path
+      required: true
+      schema:
+        type: string
+        example: CE-26-7Q4M2K
+
+  responses:
+    NoAutorizado:
+      description: Token de cliente ausente, vencido o sin el permiso necesario. `NO_AUTORIZADO`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: NO_AUTORIZADO
+            mensaje: Credenciales de la aplicación no válidas.
+            rastreo: a41c9e07
+    SesionPacienteInvalida:
+      description: |
+        `SESION_PACIENTE_INVALIDA`: `X-Paciente-Token` ausente, vencido o de otro cliente; volver a identificar
+        al paciente. Si el problema es el token de cliente, el código es `NO_AUTORIZADO`.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: SESION_PACIENTE_INVALIDA
+            mensaje: Tu sesión terminó. Vuelve a ingresar tu DNI y fecha de nacimiento.
+            rastreo: 3e8b52f0
+    DatosInvalidos:
+      description: |
+        `DATOS_INVALIDOS`. `errores` indica qué campo o cabecera falló (también si falta una cabecera
+        obligatoria como `X-Request-Id` o `Idempotency-Key`).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: DATOS_INVALIDOS
+            mensaje: Revisa los datos ingresados.
+            errores:
+              numero_documento: El DNI debe tener 8 dígitos.
+            rastreo: 0b44d1e7
+    DemasiadasSolicitudes:
+      description: '`DEMASIADAS_SOLICITUDES`. Esperar los segundos de la cabecera `Retry-After`.'
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: DEMASIADAS_SOLICITUDES
+            mensaje: Demasiadas solicitudes. Intenta en unos minutos.
+            rastreo: b7720d1f
+    NoDisponible:
+      description: '`CANAL_CERRADO` o `SERVICIO_NO_DISPONIBLE`. No reintentar en bucle.'
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: CANAL_CERRADO
+            mensaje: Las citas en línea no están disponibles en este momento.
+            rastreo: e03f8a65
+    EspecialidadNoPermitida:
+      description: '`ESPECIALIDAD_NO_PERMITIDA`: la especialidad no está en la elegibilidad del paciente.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: ESPECIALIDAD_NO_PERMITIDA
+            mensaje: Esa especialidad no está disponible para ti en línea.
+            rastreo: 6c19b2d4
+    CitaNoEncontrada:
+      description: '`CITA_NO_ENCONTRADA`: no existe o no pertenece al paciente.'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            codigo: CITA_NO_ENCONTRADA
+            mensaje: No encontramos esa cita.
+            rastreo: f58e0c31
+
+  schemas:
+    Error:
+      type: object
+      required: [codigo, mensaje, rastreo]
+      properties:
+        codigo:
+          type: string
+          description: |
+            Código estable. La aplicación decide qué mostrar según este valor. Pueden agregarse códigos
+            nuevos: ante uno desconocido, mostrar un mensaje genérico con `rastreo`.
+          enum:
+            - NO_AUTORIZADO
+            - DEMASIADAS_SOLICITUDES
+            - CANAL_CERRADO
+            - SERVICIO_NO_DISPONIBLE
+            - DATOS_INVALIDOS
+            - IDENTIDAD_NO_VALIDA
+            - IDENTIDAD_BLOQUEADA
+            - SESION_PACIENTE_INVALIDA
+            - NO_ELEGIBLE
+            - ESPECIALIDAD_NO_PERMITIDA
+            - PACIENTE_SUSPENDIDO
+            - CUPO_INVALIDO
+            - CUPO_TOMADO
+            - FUERA_DE_VENTANA
+            - REFERENCIA_NO_VALIDA
+            - SERVICIO_NO_ATIENDE
+            - ESPERA_ENTRE_RESERVAS
+            - CRUCE_HORARIO
+            - YA_TIENE_CITA_ESE_DIA
+            - IDEMPOTENCIA_CONFLICTO
+            - CITA_NO_ENCONTRADA
+            - CLAVE_ANULACION_INVALIDA
+            - FUERA_DE_PLAZO
+            - CITA_EN_ATENCION
+            - CITA_YA_ANULADA
+            - ANULACION_SOLO_EN_VENTANILLA
+            - ERROR_INTERNO
+        mensaje:
+          type: string
+          description: Texto sugerido para el paciente, en español.
+        errores:
+          type: object
+          additionalProperties:
+            type: string
+        rastreo:
+          type: string
+          description: Identificador para reportar la incidencia al Hospital.
+
+    TokenCliente:
+      type: object
+      required: [access_token, token_type, expires_in, scope]
+      properties:
+        access_token:
+          type: string
+          example: eyJhbGciOiJSUzI1NiJ9.ejemplo.firma
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          example: 900
+        scope:
+          type: string
+          example: portal.leer portal.citar
+
+    Salud:
+      type: object
+      required: [canal_abierto, verificacion_sis, hora_servidor]
+      properties:
+        canal_abierto:
+          type: boolean
+        verificacion_sis:
+          type: string
+          enum: [DISPONIBLE, LIMITADA, NO_DISPONIBLE]
+          description: '`LIMITADA` o `NO_DISPONIBLE`: es probable que la elegibilidad responda `SIS_NO_VERIFICABLE`.'
+        hora_servidor:
+          type: string
+          format: date-time
+      example:
+        canal_abierto: true
+        verificacion_sis: DISPONIBLE
+        hora_servidor: '2026-10-14T09:00:00-05:00'
+
+    Politicas:
+      type: object
+      required: [ventana, reservas_por_dia, dias_entre_reservas, horas_minimas_para_anular, intentos_identificacion, sesion_paciente_segundos]
+      properties:
+        ventana:
+          type: object
+          properties:
+            desde:
+              type: string
+              format: date
+              description: Primer día reservable (mañana).
+            hasta:
+              type: string
+              format: date
+              description: Último día reservable (fin del mes siguiente).
+        reservas_por_dia:
+          type: integer
+          description: Reservas que un paciente puede hacer en un mismo día calendario.
+          example: 1
+        dias_entre_reservas:
+          type: integer
+          description: |
+            Días que debe esperar el paciente desde su última reserva por este canal, aunque la haya anulado.
+            Se cuentan como horas corridas desde el momento de la reserva (2 = 48 horas); la fecha exacta
+            sale en `Elegibilidad.proxima_reserva_desde`.
+          example: 2
+        horas_minimas_para_anular:
+          type: integer
+          description: Anticipación mínima respecto a la hora de inicio de la cita. Ver `Cita.anulable_hasta`.
+          example: 24
+        intentos_identificacion:
+          type: integer
+          description: Intentos fallidos por DNI antes del bloqueo temporal.
+          example: 5
+        sesion_paciente_segundos:
+          type: integer
+          example: 900
+      example:
+        ventana:
+          desde: '2026-10-15'
+          hasta: '2026-11-30'
+        reservas_por_dia: 1
+        dias_entre_reservas: 2
+        horas_minimas_para_anular: 24
+        intentos_identificacion: 5
+        sesion_paciente_segundos: 900
+
+    MotivoAnulacion:
+      type: object
+      required: [motivo_id, descripcion]
+      properties:
+        motivo_id:
+          type: string
+        descripcion:
+          type: string
+
+    SolicitudIdentificacion:
+      type: object
+      required: [tipo_documento, numero_documento, fecha_nacimiento]
+      properties:
+        tipo_documento:
+          type: string
+          enum: [DNI]
+          description: Por ahora solo DNI.
+        numero_documento:
+          type: string
+          pattern: '^[0-9]{8}$'
+          example: '40123456'
+        fecha_nacimiento:
+          type: string
+          format: date
+          example: '1985-03-14'
+
+    SesionPaciente:
+      type: object
+      required: [paciente_token, expira_en, paciente]
+      properties:
+        paciente_token:
+          type: string
+          example: pt_4Hq8ZrT2mV9xK1sB
+        expira_en:
+          type: integer
+          example: 900
+        paciente:
+          type: object
+          properties:
+            nombre_enmascarado:
+              type: string
+              example: JU** PÉ*** G***
+            edad:
+              type: integer
+              example: 41
+
+    Elegibilidad:
+      type: object
+      required: [elegible, motivos, condicion, sis, proxima_reserva_desde, referencias, especialidades]
+      properties:
+        elegible:
+          type: boolean
+        motivos:
+          type: array
+          description: Vacío si es elegible. Pueden agregarse motivos nuevos; tratar uno desconocido como «no elegible» con mensaje genérico.
+          items:
+            type: string
+            enum:
+              - SIS_NO_VIGENTE
+              - SIS_NO_VERIFICABLE
+              - PACIENTE_NUEVO
+              - SIN_REFERENCIA
+              - SIN_ESPECIALIDADES_PROGRAMADAS
+              - ESPERA_ENTRE_RESERVAS
+              - PACIENTE_SUSPENDIDO
+        condicion:
+          type: string
+          enum: [CONTINUADOR, REINGRESANTE, NUEVO]
+          description: |
+            CONTINUADOR: atención en el año actual. REINGRESANTE: atención en años anteriores.
+            NUEVO: sin atenciones previas; no puede reservar por este canal.
+        sis:
+          type: object
+          properties:
+            estado:
+              type: string
+              enum: [VIGENTE, NO_VIGENTE, NO_VERIFICABLE]
+            verificado_en:
+              type: string
+              format: date-time
+        proxima_reserva_desde:
+          type: string
+          format: date-time
+          nullable: true
+          description: Si hay que esperar entre reservas, desde cuándo puede volver a reservar.
+        referencias:
+          type: array
+          description: Referencias en estado ACEPTADA o RECIBIDA, tal como vienen de REFCON.
+          items:
+            $ref: '#/components/schemas/Referencia'
+        especialidades:
+          type: array
+          description: Especialidades reservables ahora (programadas, habilitadas y con referencia que coincide).
+          items:
+            $ref: '#/components/schemas/EspecialidadPermitida'
+
+    EspecialidadPermitida:
+      type: object
+      required: [especialidad_id, nombre, referencias]
+      properties:
+        especialidad_id:
+          type: string
+          description: Opaco. Usarlo tal cual en las rutas de disponibilidad.
+        nombre:
+          type: string
+        referencias:
+          type: array
+          description: '`referencia_id` de las referencias que sirven para esta especialidad.'
+          items:
+            type: string
+
+    Referencia:
+      type: object
+      required: [referencia_id, numero, estado, fecha_envio, establecimiento_origen, especialidad_destino, especialidades_coincidentes]
+      properties:
+        referencia_id:
+          type: string
+          description: Opaco. Se envía al reservar.
+        numero:
+          type: string
+          example: 4212-01160
+        estado:
+          type: string
+          enum: [ACEPTADA, RECIBIDA]
+        fecha_envio:
+          type: string
+          format: date
+          description: Fecha en que el establecimiento de origen envió la referencia. La vigencia la decide la aplicación cliente.
+        establecimiento_origen:
+          type: string
+          example: C.S. MAGLLANAL
+        especialidad_destino:
+          type: object
+          description: Especialidad de destino tal como la registra REFCON.
+          properties:
+            codigo:
+              type: string
+            nombre:
+              type: string
+        especialidades_coincidentes:
+          type: array
+          description: |
+            `especialidad_id` del Hospital que corresponden a la especialidad de destino (por UPS).
+            Vacío si no se encontró correspondencia: esa referencia no sirve para reservar en línea.
+          items:
+            type: string
+
+    DiaDisponible:
+      type: object
+      required: [fecha, cupos_libres]
+      properties:
+        fecha:
+          type: string
+          format: date
+        cupos_libres:
+          type: integer
+          description: Aproximado; se recalcula al reservar.
+      example:
+        fecha: '2026-11-04'
+        cupos_libres: 7
+
+    Cupo:
+      type: object
+      required: [cupo_id, fecha, hora_inicio, hora_fin, consultorio, medico]
+      properties:
+        cupo_id:
+          type: string
+          description: Opaco y firmado. Vence en 10 minutos; pedir la lista otra vez si vence.
+        fecha:
+          type: string
+          format: date
+        hora_inicio:
+          type: string
+          example: '08:20'
+        hora_fin:
+          type: string
+          example: '08:40'
+        consultorio:
+          type: string
+          example: TRAUMATOLOGÍA 1
+        medico:
+          type: string
+          example: DR. PÉREZ GÓMEZ, LUIS
+      example:
+        cupo_id: cp_v1.Q2xX9mP4.8e1f
+        fecha: '2026-11-04'
+        hora_inicio: '08:20'
+        hora_fin: '08:40'
+        consultorio: TRAUMATOLOGÍA 1
+        medico: DR. PÉREZ GÓMEZ, LUIS
+
+    SolicitudCita:
+      type: object
+      required: [cupo_id, referencia_id, telefono_contacto]
+      properties:
+        cupo_id:
+          type: string
+        referencia_id:
+          type: string
+        telefono_contacto:
+          type: string
+          pattern: '^([0-9]{7}|[0-9]{9})$'
+          description: 9 dígitos (celular) o 7 (fijo).
+          example: '987654321'
+
+    Cita:
+      type: object
+      required: [codigo_cita, estado, canal, fecha, hora_inicio, hora_fin, especialidad, consultorio, medico, financiamiento, indicaciones, anulable_hasta]
+      properties:
+        codigo_cita:
+          type: string
+          example: CE-26-7Q4M2K
+        estado:
+          type: string
+          description: Pueden agregarse estados nuevos; mostrar uno desconocido tal cual, sin ofrecer anular.
+          enum: [RESERVADA, ATENDIDA, ANULADA, NO_ASISTIO]
+        canal:
+          type: string
+          enum: [EN_LINEA, VENTANILLA]
+        fecha:
+          type: string
+          format: date
+          example: '2026-11-04'
+        hora_inicio:
+          type: string
+          example: '08:20'
+        hora_fin:
+          type: string
+          example: '08:40'
+        especialidad:
+          type: string
+          example: TRAUMATOLOGÍA Y ORTOPEDIA
+        consultorio:
+          type: string
+          example: TRAUMATOLOGÍA 1
+        medico:
+          type: string
+          example: DR. PÉREZ GÓMEZ, LUIS
+        financiamiento:
+          type: string
+          example: SIS
+        indicaciones:
+          type: array
+          items:
+            type: string
+          example:
+            - Llegar 30 minutos antes a Admisión con tu DNI.
+            - Traer tu hoja de referencia.
+            - Guardar la clave de anulación que te dio la aplicación.
+        anulable_hasta:
+          type: string
+          format: date-time
+          nullable: true
+          description: Hasta cuándo se puede anular por este canal. `null` si ya no se puede o si la cita es de ventanilla.
+          example: '2026-11-03T08:20:00-05:00'
+
+    CitaCreada:
+      allOf:
+        - $ref: '#/components/schemas/Cita'
+        - type: object
+          required: [clave_anulacion]
+          properties:
+            clave_anulacion:
+              type: string
+              description: Solo en la respuesta de la reserva. Se pide para anular por este canal.
+              example: K7P2QX
+
+  examples:
+    ElegibilidadOk:
+      summary: Paciente elegible
+      value:
+        elegible: true
+        motivos: []
+        condicion: CONTINUADOR
+        sis:
+          estado: VIGENTE
+          verificado_en: '2026-10-12T09:12:44-05:00'
+        proxima_reserva_desde: null
+        referencias:
+          - referencia_id: rf_3MZ9
+            numero: 4212-01160
+            estado: ACEPTADA
+            fecha_envio: '2026-09-28'
+            establecimiento_origen: C.S. MAGLLANAL
+            especialidad_destino:
+              codigo: '1-0070'
+              nombre: TRAUMATOLOGIA
+            especialidades_coincidentes: [es_8KQ2]
+        especialidades:
+          - especialidad_id: es_8KQ2
+            nombre: TRAUMATOLOGÍA Y ORTOPEDIA
+            referencias: [rf_3MZ9]
+    ElegibilidadSinReferencia:
+      summary: SIS vigente pero sin referencia aceptada o recibida
+      value:
+        elegible: false
+        motivos: [SIN_REFERENCIA]
+        condicion: REINGRESANTE
+        sis:
+          estado: VIGENTE
+          verificado_en: '2026-10-12T09:12:44-05:00'
+        proxima_reserva_desde: null
+        referencias: []
+        especialidades: []
+    ElegibilidadEnEspera:
+      summary: Reservó hace menos de 2 días
+      value:
+        elegible: false
+        motivos: [ESPERA_ENTRE_RESERVAS]
+        condicion: CONTINUADOR
+        sis:
+          estado: VIGENTE
+          verificado_en: '2026-10-12T09:12:44-05:00'
+        proxima_reserva_desde: '2026-10-14T10:31:00-05:00'
+        referencias: []
+        especialidades: []
+    ElegibilidadSisNoVerificable:
+      summary: No se pudo verificar el SIS en este momento
+      value:
+        elegible: false
+        motivos: [SIS_NO_VERIFICABLE]
+        condicion: CONTINUADOR
+        sis:
+          estado: NO_VERIFICABLE
+        proxima_reserva_desde: null
+        referencias: []
+        especialidades: []

@@ -1,0 +1,12 @@
+Implementar en un Web/App
+
+1. Carga Esqueleto
+2. Jerarquia Visual
+texto alternativo en imágenes
+velocidad de carga optim,izada
+constraste de colores
+que se vea bien en el móvil
+pagina 404 personalizada
+enlaces rotos arreglados
+formularios protegidos contra spam
+botón de whatsapp visible
