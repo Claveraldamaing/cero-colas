@@ -10,7 +10,8 @@ class SchemaMigration(Base):
 
 
 def migrate():
-    from app.p1 import auth_models, portal_models  # noqa: F401: register metadata
+    from app.modules.auth import models as auth_models  # noqa: F401: register metadata
+    from app.p1 import portal_models  # noqa: F401: register metadata
     with engine.begin() as connection:
         if connection.dialect.name == 'postgresql':
             # Concurrent application starts cannot apply the same migration twice.

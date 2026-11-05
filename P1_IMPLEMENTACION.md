@@ -52,7 +52,7 @@ React (cookie local, sin tokens del hospital)
         → Prism / API del hospital (OAuth + identificación + elegibilidad)
 ```
 
-`backend/app/p1/auth.py` administra cuentas y permisos. `hospital.py` contiene el adaptador de `apicitas`; `portal.py`, elegibilidad, dashboards y encuestas. `frontend/src/p1` contiene las pantallas activas; el código del prototipo anterior fue retirado.
+`backend/app/modules/auth/` administra cuentas y permisos. `hospital.py` contiene el adaptador de `apicitas`; `portal.py`, elegibilidad, dashboards y encuestas. `frontend/src/p1` contiene las pantallas activas; el código del prototipo anterior fue retirado.
 
 Tablas P1: `p1_users`, `p1_sessions`, `p1_challenges`, `p1_recovery_tokens`, `p1_auth_attempts`, `p1_usage_events`, `p1_surveys`, `p1_schema_migrations`. Sesiones y recuperación guardan hashes, nunca el token local en texto claro. El adaptador no persiste DNI, nacimiento, token de paciente ni token de cliente hospitalario; estos últimos permanecen en memoria del servidor. El comentario de la encuesta advierte que no debe contener información clínica.
 
@@ -79,7 +79,7 @@ Recuperación local: solicitarla desde la pantalla y leer el enlace desde el equ
 
 ```powershell
 cd backend
-.\.venv\Scripts\python.exe -m app.p1.auth local-mail
+.\.venv\Scripts\python.exe -m app.cli local-mail
 ```
 
 El comando imprime un enlace privado de recuperación. No copiarlo a registros públicos. En desarrollo los mensajes se guardan en `backend/.local/mailbox/recovery.jsonl`; no existe una ruta HTTP para leer ese buzón. Con SMTP configurado el enlace se envía por ese servicio. El frontend retira el token de la URL después de abrirlo.
@@ -88,7 +88,7 @@ Para crear otro administrador (solicita la contraseña sin mostrarla):
 
 ```powershell
 cd backend
-.\.venv\Scripts\python.exe -m app.p1.auth create-admin --email tu-correo --name "Administrador"
+.\.venv\Scripts\python.exe -m app.cli create-admin --email tu-correo --name "Administrador"
 ```
 
 ## Contrato para integrar a los otros practicantes

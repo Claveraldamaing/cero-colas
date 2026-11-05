@@ -13,9 +13,11 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import settings
 from app.core.database import Base, get_db
-from app.p1 import auth, hospital, portal
-from app.p1.auth_models import P1Session, P1User
+from app.modules.auth import router as auth_router
+from app.modules.auth.models import P1Session, P1User
+from app.p1 import hospital, portal
 from app.p1.hospital import HospitalClient, HospitalError
 from app.p1.portal_models import P1Survey, P1UsageEvent
 
@@ -61,11 +63,11 @@ def setup(monkeypatch, isolated_engine):
     service = HospitalClient(config, httpx.MockTransport(transport))
     monkeypatch.setattr(portal, "hospital_client", service)
     monkeypatch.setattr(hospital, "hospital_client", service)
-    monkeypatch.setattr(auth.settings, "COOKIE_SECURE", False)
+    monkeypatch.setattr(settings, "COOKIE_SECURE", False)
     monkeypatch.setattr(portal.settings, "HOSPITAL_PRIVACY_POLICY_APPROVED", False)
     monkeypatch.setattr(portal.settings, "HOSPITAL_PRIVACY_POLICY_TEXT", "")
     app = FastAPI()
-    app.include_router(auth.router, prefix="/api/v1")
+    app.include_router(auth_router.router, prefix="/api/v1")
     app.include_router(portal.router, prefix="/api/v1")
     app.dependency_overrides[get_db] = db_dependency
     with TestClient(app) as client:

@@ -159,13 +159,13 @@ Crear otro administrador:
 
 ```powershell
 Set-Location -LiteralPath (Join-Path $projectRoot 'backend')
-.\.venv\Scripts\python.exe -m app.p1.auth create-admin --email tu-correo --name "Administrador"
+.\.venv\Scripts\python.exe -m app.cli create-admin --email tu-correo --name "Administrador"
 ```
 
 Ver el último enlace de recuperación local:
 
 ```powershell
-.\.venv\Scripts\python.exe -m app.p1.auth local-mail
+.\.venv\Scripts\python.exe -m app.cli local-mail
 ```
 
 En desarrollo, los mensajes se guardan en `backend/.local/mailbox/recovery.jsonl`. El buzón se crea cuando se necesita; no hay una ruta HTTP para leerlo.

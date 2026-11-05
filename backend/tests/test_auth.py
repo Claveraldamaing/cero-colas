@@ -14,8 +14,9 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
 from app.core.security import hash_password, hash_token, utcnow, verify_password
-from app.p1 import auth
-from app.p1.auth_models import P1Session, P1User
+from app.modules.auth import router as auth_router
+from app.modules.auth import service as auth_service
+from app.modules.auth.models import P1Session, P1User
 
 
 PASSWORD = "PrototipoSeguro123"
@@ -27,18 +28,18 @@ def context(tmp_path, monkeypatch, isolated_engine):
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
     app = FastAPI()
-    app.include_router(auth.router, prefix="/api/v1")
-    app.include_router(auth.admin_router, prefix="/api/v1")
+    app.include_router(auth_router.router, prefix="/api/v1")
+    app.include_router(auth_router.admin_router, prefix="/api/v1")
 
     def db_override():
         with factory() as db:
             yield db
 
     app.dependency_overrides[get_db] = db_override
-    original_option = auth.option
+    original_option = auth_service.option
     overrides = {"COOKIE_SECURE": False, "ENVIRONMENT": "development", "LOCAL_MAIL_ENABLED": True, "LOCAL_MAILBOX_DIR": str(tmp_path), "SMTP_HOST": ""}
-    monkeypatch.setattr(auth, "option", lambda key, default=None: overrides.get(key, original_option(key, default)))
-    monkeypatch.setattr(auth, "forget_hospital_sessions", lambda ids: None)
+    monkeypatch.setattr(auth_service, "option", lambda key, default=None: overrides.get(key, original_option(key, default)))
+    monkeypatch.setattr(auth_service, "forget_hospital_sessions", lambda ids: None)
     with TestClient(app) as client:
         yield client, factory, tmp_path
     engine.dispose()
@@ -77,7 +78,7 @@ def test_register_normalizes_account_and_never_stores_password_or_raw_session(co
         user = db.query(P1User).one()
         session = db.query(P1Session).one()
         assert user.password_hash != PASSWORD and verify_password(PASSWORD, user.password_hash)
-        assert session.token_hash == hash_token(client.cookies[auth.COOKIE_NAME])
+        assert session.token_hash == hash_token(client.cookies[auth_service.COOKIE_NAME])
         assert session.csrf_hash == hash_token(response.json()["csrf_token"])
     assert client.get("/api/v1/auth/me").json()["user"]["id"] == response.json()["user"]["id"]
 
@@ -106,9 +107,9 @@ def test_profile_requires_csrf_and_cannot_escalate_role(context):
 def test_logout_invalidates_cookie_session_even_if_replayed(context):
     client, _, _ = context
     response = register(client)
-    token = client.cookies[auth.COOKIE_NAME]
+    token = client.cookies[auth_service.COOKIE_NAME]
     assert client.post("/api/v1/auth/logout", headers=csrf(response)).status_code == 200
-    client.cookies.set(auth.COOKIE_NAME, token)
+    client.cookies.set(auth_service.COOKIE_NAME, token)
     assert client.get("/api/v1/auth/me").status_code == 401
 
 
@@ -136,7 +137,7 @@ def test_login_locks_unknown_and_existing_accounts_equally(context, exists):
 def test_change_password_rotates_session_and_revokes_all_old_sessions(context):
     client, factory, _ = context
     registered = register(client)
-    old_token = client.cookies[auth.COOKIE_NAME]
+    old_token = client.cookies[auth_service.COOKIE_NAME]
     assert client.post("/api/v1/auth/change-password", headers=csrf(registered), json={"current_password": "Incorrect1", "new_password": "NuevaSegura123"}).status_code == 400
     response = client.post("/api/v1/auth/change-password", headers=csrf(registered), json={"current_password": PASSWORD, "new_password": "NuevaSegura123"})
     assert response.status_code == 200
@@ -149,7 +150,7 @@ def test_change_password_rotates_session_and_revokes_all_old_sessions(context):
 def test_recovery_is_generic_single_use_and_revokes_sessions(context):
     client, _, directory = context
     register(client)
-    old_token = client.cookies[auth.COOKIE_NAME]
+    old_token = client.cookies[auth_service.COOKIE_NAME]
     existing = client.post("/api/v1/auth/forgot-password", json={"email": "paciente@example.com", **challenge(client)})
     absent = client.post("/api/v1/auth/forgot-password", json={"email": "absent@example.com", **challenge(client)})
     assert existing.status_code == absent.status_code == 200
@@ -160,7 +161,7 @@ def test_recovery_is_generic_single_use_and_revokes_sessions(context):
     payload = {"token": token, "new_password": "RecuperadaSegura123"}
     assert client.post("/api/v1/auth/reset-password", json=payload).status_code == 200
     assert client.post("/api/v1/auth/reset-password", json=payload).status_code == 400
-    client.cookies.set(auth.COOKIE_NAME, old_token)
+    client.cookies.set(auth_service.COOKIE_NAME, old_token)
     assert client.get("/api/v1/auth/me").status_code == 401
     client.cookies.clear()
     assert login(client, password="RecuperadaSegura123").status_code == 200

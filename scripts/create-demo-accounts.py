@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import hash_password
 from app.migrate import migrate
-from app.p1.auth_models import P1User
+from app.modules.auth.models import P1User
 
 if settings.ENVIRONMENT != 'development' or settings.HOSPITAL_MODE != 'simulator':
     raise SystemExit('Solo se permiten cuentas de demostración en desarrollo con simulador.')

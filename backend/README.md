@@ -29,8 +29,8 @@ los usuarios reales de `public`. El DDL de referencia es `database/schema_p1.sql
 ## Administración local
 
 ```powershell
-.\.venv\Scripts\python.exe -m app.p1.auth create-admin --email tu-correo --name Administrador
-.\.venv\Scripts\python.exe -m app.p1.auth local-mail
+.\.venv\Scripts\python.exe -m app.cli create-admin --email tu-correo --name Administrador
+.\.venv\Scripts\python.exe -m app.cli local-mail
 ```
 
 La primera orden pide una contraseña; la segunda muestra un enlace privado de recuperación

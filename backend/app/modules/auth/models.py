@@ -1,3 +1,4 @@
+"""Identity, session, challenge and recovery tables for the auth module."""
 import uuid
 
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, JSON, String
