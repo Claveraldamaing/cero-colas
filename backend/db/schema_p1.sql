@@ -1,6 +1,6 @@
 -- Esquema P1 PostgreSQL. Referencia generada desde los modelos SQLAlchemy.
 
--- Aplicar con: python -m app.migrate (versiona la inicialización).
+-- Aplicar con: python -m app.db.migrate (versiona la inicialización).
 
 -- Sin DNI, fecha de nacimiento ni tokens hospitalarios persistentes.
 

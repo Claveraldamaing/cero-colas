@@ -18,13 +18,13 @@ El prototipo anterior y su archivo SQLite fueron retirados; SQLite solo se usa e
 Desde backend:
 
 ```powershell
-.\.venv\Scripts\python.exe -m app.migrate
+.\.venv\Scripts\python.exe -m app.db.migrate
 .\.venv\Scripts\python.exe -m pytest tests -q
 .\.venv\Scripts\python.exe -m pytest tests --postgres -q
 ```
 
 La segunda ejecución de pruebas usa esquemas PostgreSQL temporales; no modifica
-los usuarios reales de `public`. El DDL de referencia es `database/schema_p1.sql`.
+los usuarios reales de `public`. El DDL de referencia es `db/schema_p1.sql`.
 
 ## Administración local
 

@@ -9,7 +9,7 @@ sys.path.insert(0, str(ROOT / 'backend'))
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import hash_password
-from app.migrate import migrate
+from app.db.migrate import migrate
 from app.modules.auth.models import P1User
 
 if settings.ENVIRONMENT != 'development' or settings.HOSPITAL_MODE != 'simulator':

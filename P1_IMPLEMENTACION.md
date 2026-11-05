@@ -60,10 +60,10 @@ La migración inicial es aditiva, versionada e idempotente. Se ejecuta al arranc
 
 ```powershell
 cd backend
-.\.venv\Scripts\python.exe -m app.migrate
+.\.venv\Scripts\python.exe -m app.db.migrate
 ```
 
-El DDL de referencia está en `backend/database/schema_p1.sql`. Cambios futuros de esquema necesitan una nueva migración; `create_all` no modifica columnas ya existentes.
+El DDL de referencia está en `backend/db/schema_p1.sql`. Cambios futuros de esquema necesitan una nueva migración; `create_all` no modifica columnas ya existentes.
 
 ## Prueba de demostración
 
