@@ -189,7 +189,7 @@ def login_account(db: Session, request: Request, payload: LoginInput):
 def forget_hospital_sessions(ids):
     # Lazy import prevents a dependency cycle while keeping sensitive sessions short-lived.
     try:
-        from app.p1.hospital import hospital_client
+        from app.integrations.hospital import hospital_client
     except ImportError:
         return
     for session_id in ids:

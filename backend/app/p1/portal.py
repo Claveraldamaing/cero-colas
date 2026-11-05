@@ -1,6 +1,6 @@
 """P1 identity, eligibility, dashboards and local satisfaction surveys."""
 import re
-from datetime import date, datetime, timezone
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -12,7 +12,8 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.modules.auth.models import P1Session, P1User
 from app.modules.auth.service import current_session, current_user, require_admin, require_csrf, verify_challenge
-from app.p1.hospital import HospitalError, LIMA, hospital_client
+from app.integrations.hospital import HospitalError, LIMA, hospital_client
+from app.integrations.hospital import mapper as hospital_mapper
 from app.p1.portal_models import P1Survey, P1UsageEvent
 
 router = APIRouter(prefix="/portal", tags=["P1 · Portal"])
@@ -81,7 +82,7 @@ def policies(user: P1User = Depends(current_user)):
     result = {"source": hospital_client.source, "privacy_notice": text if approved and hospital_client.source == "hospital" else PROTOTYPE_NOTICE, "privacy_approved": approved, "reference_max_age_days": getattr(settings, "REFERENCE_MAX_AGE_DAYS", None), "survey_scale": survey_scale(), "policies": None, "integration_error": None}
     try:
         payload = hospital_client.request("GET", "/politicas")
-        result["policies"] = {key: payload.get(key) for key in ("ventana", "reservas_por_dia", "dias_entre_reservas", "horas_minimas_para_anular", "intentos_identificacion", "sesion_paciente_segundos")}
+        result["policies"] = hospital_mapper.policies_payload(payload)
     except HospitalError as exc:
         result["integration_error"] = exc.detail
     return result
@@ -170,23 +171,7 @@ def submit_survey(data: SurveyInput, session: P1Session = Depends(require_csrf),
 
 def next_appointment(session_id):
     payload = hospital_client.patient_request(session_id, "/citas")
-    appointments = payload.get("datos")
-    if not isinstance(appointments, list):
-        raise HospitalError("RESPUESTA_INVALIDA", "La lista de citas enviada por el hospital está incompleta.", 502)
-    candidates = []
-    for appointment in appointments:
-        if not isinstance(appointment, dict) or appointment.get("estado") in {"ANULADA", "ATENDIDA", "NO_ASISTIO"}:
-            continue
-        try:
-            starts = datetime.fromisoformat(f"{appointment['fecha']}T{appointment['hora_inicio']}").replace(tzinfo=LIMA)
-        except (KeyError, ValueError, TypeError):
-            continue
-        if starts >= datetime.now(LIMA):
-            candidates.append((starts, appointment))
-    if not candidates:
-        return None
-    appointment = min(candidates, key=lambda item: item[0])[1]
-    return {key: appointment.get(key) for key in ("codigo_cita", "estado", "canal", "fecha", "hora_inicio", "hora_fin", "especialidad", "consultorio", "medico", "financiamiento", "indicaciones", "anulable_hasta")}
+    return hospital_mapper.next_appointment(payload, datetime.now(LIMA))
 
 
 @router.get("/dashboard")

@@ -17,8 +17,9 @@ from app.core.config import settings
 from app.core.database import Base, get_db
 from app.modules.auth import router as auth_router
 from app.modules.auth.models import P1Session, P1User
-from app.p1 import hospital, portal
-from app.p1.hospital import HospitalClient, HospitalError
+from app.integrations import hospital
+from app.integrations.hospital import HospitalClient, HospitalError
+from app.p1 import portal
 from app.p1.portal_models import P1Survey, P1UsageEvent
 
 

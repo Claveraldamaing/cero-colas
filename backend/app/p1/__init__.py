@@ -1,1 +1,1 @@
-"""Practicante 1: identidad local, integración hospitalaria y satisfacción."""
+"""Practicante 1: portal, elegibilidad local y encuestas."""

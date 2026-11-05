@@ -52,7 +52,7 @@ React (cookie local, sin tokens del hospital)
         → Prism / API del hospital (OAuth + identificación + elegibilidad)
 ```
 
-`backend/app/modules/auth/` administra cuentas y permisos. `hospital.py` contiene el adaptador de `apicitas`; `portal.py`, elegibilidad, dashboards y encuestas. `frontend/src/p1` contiene las pantallas activas; el código del prototipo anterior fue retirado.
+`backend/app/modules/auth/` administra cuentas y permisos. `backend/app/integrations/hospital/` contiene el adaptador de `apicitas`; `portal.py`, elegibilidad, dashboards y encuestas. `frontend/src/p1` contiene las pantallas activas; el código del prototipo anterior fue retirado.
 
 Tablas P1: `p1_users`, `p1_sessions`, `p1_challenges`, `p1_recovery_tokens`, `p1_auth_attempts`, `p1_usage_events`, `p1_surveys`, `p1_schema_migrations`. Sesiones y recuperación guardan hashes, nunca el token local en texto claro. El adaptador no persiste DNI, nacimiento, token de paciente ni token de cliente hospitalario; estos últimos permanecen en memoria del servidor. El comentario de la encuesta advierte que no debe contener información clínica.
 
