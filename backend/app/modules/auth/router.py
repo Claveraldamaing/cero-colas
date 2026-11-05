@@ -1,8 +1,8 @@
-"""HTTP routes for accounts, sessions, recovery and temporary admin user management."""
+"""HTTP routes for accounts, sessions and recovery."""
 import logging
 import smtplib
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -10,10 +10,9 @@ from app.core.errors import problem
 from app.core.security import csrf_for_token, utcnow
 from . import mail, repository, service
 from .models import P1Session, P1User
-from .schemas import AccountInput, ForgotInput, LoginInput, PasswordInput, ProfileInput, RegisterInput, ResetInput
+from .schemas import ForgotInput, LoginInput, PasswordInput, ProfileInput, RegisterInput, ResetInput
 
 router = APIRouter(prefix="/auth", tags=["P1 · Usuarios y seguridad"])
-admin_router = APIRouter(prefix="/admin", tags=["P1 · Administración de usuarios"])
 logger = logging.getLogger(__name__)
 
 
@@ -91,33 +90,3 @@ def reset_password(payload: ResetInput, request: Request, response: Response, db
     service.reset_password(db, request, payload)
     response.delete_cookie(service.COOKIE_NAME, path="/")
     return {"message": "Contraseña restablecida. Ya puedes iniciar sesión con tu nueva contraseña."}
-
-
-@admin_router.get("/users")
-def list_users(response: Response, user: P1User = Depends(service.require_admin), db: Session = Depends(get_db), offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=100), q: str = Query("", max_length=120)):
-    items, total = repository.list_users(db, q, offset, limit)
-    response.headers["Cache-Control"] = "no-store"
-    return {"items": [service.user_json(item) for item in items], "total": total, "offset": offset, "limit": limit}
-
-
-@admin_router.patch("/users/{user_id}", dependencies=[Depends(service.require_csrf)])
-def update_account(user_id: str, payload: AccountInput, user: P1User = Depends(service.require_admin), db: Session = Depends(get_db)):
-    # Serialize edits of active administrators so concurrent requests cannot remove all.
-    admins = repository.lock_active_admins(db)
-    target = repository.user_by_id(db, user_id)
-    if not target:
-        problem(404, "USER_NOT_FOUND", "El usuario no existe.")
-    if target.id == user.id and (payload.active is False or payload.role == "PACIENTE"):
-        problem(409, "SELF_ACCOUNT_CHANGE", "No puedes desactivar tu propia cuenta ni retirar tu rol de administrador.")
-    removing_admin = target.role == "ADMIN" and target.active and (payload.active is False or payload.role == "PACIENTE")
-    if removing_admin and len(admins) <= 1:
-        problem(409, "LAST_ADMIN", "Debe existir al menos un administrador activo.")
-    old_role = target.role
-    if payload.active is not None:
-        target.active = payload.active
-    if payload.role is not None:
-        target.role = payload.role
-    if not target.active or old_role != target.role:
-        service.revoke_sessions(db, target.id)
-    db.commit()
-    return service.user_json(target)

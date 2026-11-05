@@ -74,8 +74,3 @@ class ForgotInput(ChallengeInput):
 class ResetInput(StrictInput):
     token: str = Field(min_length=20, max_length=128)
     new_password: str = Field(min_length=1, max_length=128)
-
-
-class AccountInput(StrictInput):
-    active: bool | None = Field(default=None, strict=True)
-    role: Literal["PACIENTE", "ADMIN"] | None = None

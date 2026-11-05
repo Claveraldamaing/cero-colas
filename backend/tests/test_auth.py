@@ -14,6 +14,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
 from app.core.security import hash_password, hash_token, utcnow, verify_password
+from app.modules.admin.router import router as admin_router
 from app.modules.auth import router as auth_router
 from app.modules.auth import service as auth_service
 from app.modules.auth.models import P1Session, P1User
@@ -29,7 +30,7 @@ def context(tmp_path, monkeypatch, isolated_engine):
     factory = sessionmaker(bind=engine)
     app = FastAPI()
     app.include_router(auth_router.router, prefix="/api/v1")
-    app.include_router(auth_router.admin_router, prefix="/api/v1")
+    app.include_router(admin_router, prefix="/api/v1")
 
     def db_override():
         with factory() as db:
