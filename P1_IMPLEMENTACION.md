@@ -38,7 +38,8 @@ El prototipo anterior y su SQLite fueron retirados. La aplicación P1 no publica
 | Identificación | DNI y fecha de nacimiento, consentimiento y protección contra intentos; llamada servidor a servidor al endpoint entregado. |
 | Elegibilidad | SIS, condición, referencias, especialidades, próxima fecha permitida, mensajes por motivo, expiración y cambio de paciente. |
 | Inicio del paciente | Estado de identidad, resumen de elegibilidad y próxima cita consultada con `GET /citas`. El resumen de notificaciones indica que requiere integración P3. |
-| Resumen administrativo | Cuentas reales de la base, salud del servicio/canal, promedios y distribución de encuestas guardadas. Los contadores que dependen de P2/P3/P4 muestran «Sin integrar». |
+| Reservas P2 | Flujo de especialidad, fecha, horario y confirmación; asociación con la cuenta local, persistencia de la cita y protección idempotente. Las reservas locales del simulador son de prueba, no citas reales. |
+| Resumen administrativo | Cuentas reales de la base, salud del servicio/canal, promedios y distribución de encuestas guardadas. Los contadores que dependen de P3/P4 muestran «Sin integrar». |
 | Satisfacción | Facilidad y satisfacción de 1 a 5, comentario opcional, una respuesta por sesión local que haya completado una consulta de elegibilidad. La escala y la condición de habilitación son decisiones del prototipo, no reglas atribuidas al hospital. |
 
 La verificación aritmética es una protección básica de desarrollo acompañada de límites de intentos; no se presenta como un CAPTCHA de producción.
@@ -69,7 +70,7 @@ El DDL de referencia está en `backend/db/schema_p1.sql`. Cambios futuros de esq
 
 1. Crear una cuenta o entrar como paciente de prueba.
 2. Abrir Identificación, usar los datos de prueba del contrato, aceptar el aviso y resolver la verificación.
-3. Revisar SIS, condición, referencias, especialidades y advertencia sobre vigencia pendiente.
+3. Revisar SIS, condición, referencias y especialidades. En el simulador local, seleccionar «Iniciar reserva» y completar los pasos; la confirmación crea solo una cita de prueba.
 4. Abrir Mi inicio para consultar la próxima cita del simulador.
 5. Responder Satisfacción y comprobar que no permite duplicar la respuesta en esa sesión.
 6. Cambiar nombre, preferencias y contraseña. Cerrar sesión.
@@ -105,11 +106,11 @@ Las operaciones autenticadas de escritura requieren `X-CSRF-Token`, recibido al 
 
 ## Definiciones y servicios todavía externos
 
-- **Vigencia de referencias:** falta la regla de Admisión. `REFERENCE_MAX_AGE_DAYS` queda sin definir; `reserve_ready` permanece falso. El parámetro permite probar una regla de días cuando el hospital la confirme. Si la regla real es más compleja, se debe adaptar el evaluador.
+- **Vigencia de referencias:** falta la regla de Admisión. En `HOSPITAL_MODE=hospital`, `REFERENCE_MAX_AGE_DAYS` debe configurarse antes de habilitar reservas. Para probar el flujo, `HOSPITAL_MODE=simulator` conectado a localhost permite reservar con referencias aceptadas o recibidas sin aplicar temporalmente el límite de días; la respuesta del simulador no representa una cita real.
 - **Privacidad institucional:** se muestra un aviso provisional de pruebas. El modo `hospital` bloquea la identificación hasta configurar texto y aprobación de la política. No marcarla aprobada sin el documento correspondiente.
 - **Ambiente hospitalario real:** faltan URL, client_id, client_secret e IP de salida autorizada. El prototipo está conectado a Prism, no al hospital.
 - **Producción:** requiere política aprobada, protección CAPTCHA adecuada, correo institucional, HTTPS, configuración del proxy/IP real y auditoría del hospital. SMTP se implementó pero no se probó un envío real por falta de credenciales.
-- **Dependencias de equipo:** reservar, anular, tickets, chatbot y envío de notificaciones no se implementaron como operaciones ficticias dentro de P1.
+- **Dependencias de equipo:** anular, tickets, chatbot y envío de notificaciones siguen pendientes de integración.
 
 Usar **un solo worker**: las sesiones hospitalarias y límites de identificación están en memoria. Reiniciar FastAPI exige identificar nuevamente al paciente. Escalar requiere un diseño compartido y efímero aprobado que siga respetando la guía de datos del hospital.
 
@@ -143,6 +144,6 @@ npm.cmd run lint:p1
 npm.cmd audit
 ```
 
-La opción `--postgres` crea un esquema temporal aleatorio para cada prueba y elimina solo ese esquema al terminar; no toca las tablas públicas. Se verificaron 26 pruebas en SQLite y las mismas 26 en PostgreSQL: sesiones, CSRF, roles, intentos, recuperación, contrato hospitalario, errores, privacidad y encuestas. Hay una advertencia de deprecación de `httpx` en el cliente de pruebas de Starlette; no es un fallo de ejecución.
+La opción `--postgres` crea un esquema temporal aleatorio para cada prueba y elimina solo ese esquema al terminar; no toca las tablas públicas. Se verificaron 29 pruebas en SQLite: sesiones, CSRF, roles, intentos, recuperación, contrato hospitalario, errores, privacidad, encuestas y reservas de prueba. Hay una advertencia de deprecación de `httpx` en el cliente de pruebas de Starlette; no es un fallo de ejecución.
 
 Se verificó el recorrido con Edge en escritorio y vista móvil de 390 px. La auditoría posterior a la actualización de dependencias no reportó vulnerabilidades conocidas en los requisitos del backend ni en el frontend en la fecha de revisión. Las pruebas hospitalarias son contra Prism o fixtures identificadas; no prueban disponibilidad ni reglas del servidor real.

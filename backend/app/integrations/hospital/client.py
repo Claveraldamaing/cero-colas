@@ -11,8 +11,11 @@ from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 
 import httpx
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
+from app.core.database import SessionLocal
+from app.modules.reservations.models import APIAudit
 from . import mapper, policy
 from .errors import ERROR_MESSAGES, HospitalError
 from .schemas import PatientIdentity
@@ -20,10 +23,17 @@ from .schemas import PatientIdentity
 logger = logging.getLogger("cerocolas.hospital")
 
 
+def persist_api_audit(entry):
+    with SessionLocal() as db:
+        db.add(APIAudit(**entry))
+        db.commit()
+
+
 class HospitalClient:
-    def __init__(self, config=settings, transport=None):
+    def __init__(self, config=settings, transport=None, audit_writer=None):
         self.config = config
         self.transport = transport  # Explicit test injection, never a runtime fallback.
+        self.audit_writer = audit_writer
         self._client_token: str | None = None
         self._token_expires = 0.0
         self._lock = threading.RLock()
@@ -44,13 +54,58 @@ class HospitalClient:
             raise HospitalError("INTEGRACION_NO_CONFIGURADA", "La conexión hospitalaria requiere HTTPS.")
         return url, client_id, client_secret
 
-    def _send(self, method, path, **kwargs):
+    def _audit(self, request_id, method, path, status, error_code, elapsed_ms, retry_number):
+        if self.audit_writer is None:
+            return
+        try:
+            self.audit_writer({
+                "request_id": request_id,
+                "metodo_http": method[:10],
+                "endpoint": path[:255],
+                "estado_http": status,
+                "codigo_error": error_code[:100] if error_code else None,
+                "rastreo": request_id,
+                "tiempo_respuesta_ms": elapsed_ms,
+                "numero_reintento": retry_number,
+                "fecha_hora": datetime.now(timezone.utc),
+            })
+        except SQLAlchemyError as error:
+            logger.error(
+                "hospital_audit_write_failed request_id=%s error_type=%s",
+                request_id,
+                type(error).__name__,
+            )
+
+    def _send(self, method, path, *, audit_request_id=None, retry_number=0, **kwargs):
         base, _, _ = self._configuration()
+        request_id = audit_request_id or str(uuid.uuid4())
+        started = time.monotonic()
         try:
             with httpx.Client(timeout=getattr(self.config, "HOSPITAL_API_TIMEOUT_SECONDS", 15), transport=self.transport, follow_redirects=False) as client:
-                return client.request(method, base + path, **kwargs)
+                response = client.request(method, base + path, **kwargs)
         except (httpx.HTTPError, OSError):
+            elapsed_ms = int((time.monotonic() - started) * 1000)
+            self._audit(request_id, method, path, None, "SERVICIO_NO_DISPONIBLE", elapsed_ms, retry_number)
+            logger.warning(
+                "hospital_request request_id=%s path=%s status=unavailable elapsed_ms=%d",
+                request_id,
+                path,
+                elapsed_ms,
+            )
             raise HospitalError("SERVICIO_NO_DISPONIBLE", ERROR_MESSAGES["SERVICIO_NO_DISPONIBLE"]) from None
+        error_code = None
+        if not response.is_success:
+            error_code = str(self._json(response).get("codigo", "ERROR_SERVICIO"))
+        self._audit(
+            request_id,
+            method,
+            path,
+            response.status_code,
+            error_code,
+            int((time.monotonic() - started) * 1000),
+            retry_number,
+        )
+        return response
 
     @staticmethod
     def _json(response):
@@ -77,9 +132,10 @@ class HospitalClient:
             if not force and self._client_token and time.monotonic() < self._token_expires:
                 return self._client_token
             _, client_id, secret = self._configuration()
-            response = self._send("POST", "/oauth/token", data={"grant_type": "client_credentials", "client_id": client_id, "client_secret": secret, "scope": "portal.leer portal.citar"})
+            request_id = str(uuid.uuid4())
+            response = self._send("POST", "/oauth/token", audit_request_id=request_id, retry_number=int(force), data={"grant_type": "client_credentials", "client_id": client_id, "client_secret": secret, "scope": "portal.leer portal.citar"})
             if response.status_code != 200:
-                raise self._error(response, str(uuid.uuid4()))
+                raise self._error(response, request_id)
             payload = self._json(response)
             token, lifetime = payload.get("access_token"), payload.get("expires_in")
             if not isinstance(token, str) or not token or not isinstance(lifetime, int) or lifetime <= 0 or str(payload.get("token_type", "")).lower() != "bearer":
@@ -88,7 +144,7 @@ class HospitalClient:
             self._token_expires = time.monotonic() + max(lifetime - 30, 1)
             return token
 
-    def request(self, method: str, path: str, *, patient_token=None, user_ip=None, json=None):
+    def request(self, method: str, path: str, *, patient_token=None, user_ip=None, json=None, params=None, idempotency_key=None):
         for attempt in range(2):
             request_id = str(uuid.uuid4())
             headers = {"Authorization": "Bearer " + self._token(force=attempt == 1), "X-Request-Id": request_id}
@@ -96,9 +152,19 @@ class HospitalClient:
                 headers["X-Paciente-Token"] = patient_token
             if user_ip:
                 headers["X-Usuario-IP"] = user_ip
+            if idempotency_key:
+                headers["Idempotency-Key"] = idempotency_key
             started = time.monotonic()
             try:
-                response = self._send(method, path, headers=headers, json=json)
+                response = self._send(
+                    method,
+                    path,
+                    audit_request_id=request_id,
+                    retry_number=attempt,
+                    headers=headers,
+                    json=json,
+                    params=params,
+                )
             except HospitalError:
                 logger.warning("hospital_request request_id=%s path=%s status=unavailable elapsed_ms=%d", request_id, path, int((time.monotonic() - started) * 1000))
                 raise
@@ -154,10 +220,17 @@ class HospitalClient:
             self._identities[str(session_id)] = identity
         return identity
 
-    def patient_request(self, session_id, path):
+    def patient_request(self, session_id, path, *, method="GET", params=None, json=None, idempotency_key=None):
         identity = self.identity(session_id, required=True)
         try:
-            return self.request("GET", path, patient_token=identity.token)
+            return self.request(
+                method,
+                path,
+                patient_token=identity.token,
+                params=params,
+                json=json,
+                idempotency_key=idempotency_key,
+            )
         except HospitalError as exc:
             if exc.detail["code"] == "SESION_PACIENTE_INVALIDA":
                 self.forget(session_id)
@@ -180,4 +253,4 @@ class HospitalClient:
         return {"identified": True, "paciente": identity.patient, "expires_at": identity.expires_at.isoformat(), "seconds_remaining": max(0, int((identity.expires_at - datetime.now(timezone.utc)).total_seconds()))}
 
 
-hospital_client = HospitalClient()
+hospital_client = HospitalClient(audit_writer=persist_api_audit)

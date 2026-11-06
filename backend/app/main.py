@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
-from pathlib import Path
 import logging
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,15 +18,20 @@ async def lifespan(app):
     migrate()
     yield
 
-app = FastAPI(title=settings.PROJECT_NAME, version=settings.VERSION, lifespan=lifespan)
+app = FastAPI(
+    title=settings.PROJECT_NAME,
+    version=settings.VERSION,
+    lifespan=lifespan,
+)
 audit_logger = logging.getLogger('cerocolas.hospital')
 audit_logger.setLevel(logging.INFO)
 if not audit_logger.handlers:
     audit_logger.addHandler(logging.StreamHandler())
 audit_logger.propagate = False
 app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ORIGINS,
-                   allow_credentials=True, allow_methods=['GET', 'POST', 'PATCH', 'DELETE'],
-                   allow_headers=['Content-Type', 'X-CSRF-Token'])
+                allow_credentials=True, allow_methods=['GET', 'POST', 'PATCH', 'DELETE'],
+                allow_headers=['Content-Type', 'X-CSRF-Token'])
+app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
 @app.exception_handler(RequestValidationError)
 async def invalid_request(request, exc):
@@ -54,14 +60,10 @@ def health():
     try:
         with engine.connect() as connection:
             connection.execute(text('SELECT 1'))
-        return {'status': 'healthy', 'database': engine.dialect.name, 'module': 'P1', 'hospital_mode': settings.HOSPITAL_MODE}
+        return {'status': 'healthy', 'database': engine.dialect.name, 'module': 'P1+P2', 'hospital_mode': settings.HOSPITAL_MODE}
     except Exception:
         return JSONResponse(status_code=503, content={'status': 'unavailable', 'database': 'unavailable'})
 
-app.include_router(api_router, prefix=settings.API_V1_PREFIX)
-
-# Las rutas del prototipo anterior no se exponen: no tienen autenticación
-# y sus datos ficticios no deben confundirse con operaciones hospitalarias.
 dist = Path(__file__).resolve().parents[2] / 'frontend' / 'dist'
 if dist.is_dir() and (dist / 'assets').is_dir():
     app.mount('/assets', StaticFiles(directory=dist / 'assets'), name='assets')

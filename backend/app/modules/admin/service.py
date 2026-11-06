@@ -7,6 +7,7 @@ from app.integrations import hospital
 from app.integrations.hospital import HospitalError
 from app.modules.auth import repository, service
 from app.modules.auth.models import P1User
+from app.modules.reservations.models import LocalAppointment
 from app.modules.surveys import service as surveys_service
 from .schemas import AccountInput
 
@@ -45,10 +46,15 @@ def portal_dashboard(db: Session):
     result = {
         "source": hospital.hospital_client.source,
         "users": {"total": total_users, "active": active_users, "inactive": total_users - active_users, "admins": db.query(func.count(P1User.id)).filter(P1User.role == "ADMIN").scalar()},
-        "metrics": {"reservations": None, "cancellations": None, "tickets": None, "chatbot": None},
+        "metrics": {
+            "reservations": db.query(func.count(LocalAppointment.id_cita_local)).scalar(),
+            "cancellations": db.query(func.count(LocalAppointment.id_cita_local)).filter(LocalAppointment.estado == "ANULADA").scalar(),
+            "tickets": None,
+            "chatbot": None,
+        },
         "survey": surveys_service.summary(db, scale),
         "service": {"available": False, "canal_abierto": None, "verificacion_sis": None, "hora_servidor": None},
-        "pending_integrations": ["Reservas gestionadas: requiere agregados del módulo P2.", "Anulaciones y notificaciones: requieren integración del módulo P3.", "Tickets y uso de chatbot: requieren integración del módulo P4."],
+        "pending_integrations": ["Anulaciones y notificaciones: requieren integración del módulo P3.", "Tickets y uso de chatbot: requieren integración del módulo P4."],
     }
     try:
         health = hospital.hospital_client.request("GET", "/salud")

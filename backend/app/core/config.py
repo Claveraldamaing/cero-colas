@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     HOSPITAL_PRIVACY_POLICY_TEXT: str = ''
     HOSPITAL_PRIVACY_POLICY_APPROVED: bool = False
     REFERENCE_MAX_AGE_DAYS: int | None = Field(default=None, ge=1)
+    CITA_ENCRYPTION_KEY: str = ''
     SURVEY_MIN_SCORE: int = 1
     SURVEY_MAX_SCORE: int = 5
     SMTP_HOST: str = ''

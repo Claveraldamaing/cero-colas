@@ -11,6 +11,7 @@ import IdentificationPage from '../features/portal/IdentificationPage';
 import SurveysPage from '../features/surveys/SurveysPage';
 import AdminDashboardPage from '../features/admin/AdminDashboardPage';
 import UserManagementPage from '../features/admin/UserManagementPage';
+import ReservationWizard from '../features/reservations/ReservationWizard';
 import { Notice, Skeleton } from '../shared/ui';
 import { navigationFor } from './navigation';
 import '../styles/p1.css';
@@ -20,6 +21,7 @@ export default function App() {
   const [resetMode] = useState(() => new URLSearchParams(window.location.search).has('reset_token') || new URLSearchParams(window.location.search).has('reset'));
   const [loading, setLoading] = useState(!resetMode);
   const [view, setView] = useState('dashboard');
+  const [reservationEligibility, setReservationEligibility] = useState(null);
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState('');
   const [expired, setExpired] = useState('');
@@ -43,7 +45,7 @@ export default function App() {
     const apply = () => document.documentElement.dataset.theme = (user?.preferences?.theme || 'system') === 'system' ? (media.matches ? 'dark' : 'light') : user.preferences.theme;
     apply(); media.addEventListener('change', apply); return () => media.removeEventListener('change', apply);
   }, [user?.preferences?.theme]);
-  function navigate(next) { setView(next); setMenu(false); setError(''); window.scrollTo({ top: 0 }); requestAnimationFrame(() => main.current?.querySelector('h1')?.focus()); }
+  function navigate(next, payload) { if (next === 'reservation') setReservationEligibility(payload); setView(next); setMenu(false); setError(''); window.scrollTo({ top: 0 }); requestAnimationFrame(() => main.current?.querySelector('h1')?.focus()); }
   function authenticated(account) { setUser(account); setExpired(''); setError(''); setView(account.role === 'ADMIN' ? 'admin' : 'dashboard'); }
   async function logout() { setBusy(true); try { await logoutRequest(); setUser(null); setCsrf(null); setView('dashboard'); setError(''); } catch (e) { setError(e.message); } finally { setBusy(false); } }
   if (loading) return <div className="initial-load"><HeartPulse size={34} aria-hidden="true" /><Skeleton label="Comprobando tu sesión" /></div>;
@@ -54,7 +56,8 @@ export default function App() {
     case 'profile': page = <ProfilePage user={user} onUser={setUser} />; break;
     case 'preferences': page = <PreferencesPage user={user} onUser={setUser} />; break;
     case 'security': page = <SecurityPage onUser={setUser} />; break;
-    case 'identify': page = <IdentificationPage revision={revision} onChanged={changed} />; break;
+    case 'identify': page = <IdentificationPage revision={revision} onChanged={changed} onReserve={eligibility => navigate('reservation', eligibility)} />; break;
+    case 'reservation': page = <ReservationWizard eligibility={reservationEligibility} onExit={() => navigate('identify')} />; break;
     case 'surveys': page = <SurveysPage navigate={navigate} onChanged={changed} />; break;
     case 'admin': page = user.role === 'ADMIN' ? <AdminDashboardPage revision={revision} navigate={navigate} /> : <Notice tone="error">No tienes acceso a esta vista.</Notice>; break;
     case 'users': page = user.role === 'ADMIN' ? <UserManagementPage user={user} onChanged={changed} /> : <Notice tone="error">No tienes acceso a esta vista.</Notice>; break;

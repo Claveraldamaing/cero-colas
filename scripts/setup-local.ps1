@@ -12,6 +12,11 @@ function New-LocalSecret {
     [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
     return ([BitConverter]::ToString($bytes)).Replace('-', '').ToLowerInvariant()
 }
+function New-FernetKey {
+    $bytes = New-Object byte[] 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    return [Convert]::ToBase64String($bytes).Replace('+', '-').Replace('/', '_')
+}
 if (!(Test-Path (Join-Path $pgBin 'pg_ctl.exe'))) {
     $archive = Join-Path $localRoot 'postgresql-16.15.zip'
     if (!(Test-Path $archive)) {
@@ -47,6 +52,20 @@ HOSPITAL_MODE=simulator
 HOSPITAL_API_BASE_URL=http://127.0.0.1:4010
 HOSPITAL_CLIENT_ID=simulator
 HOSPITAL_CLIENT_SECRET=simulator-only-not-a-real-secret
+CITA_ENCRYPTION_KEY=$(New-FernetKey)
 "@ | Set-Content -LiteralPath $envFile -Encoding utf8
+}
+$encryptionSetting = Select-String -LiteralPath $envFile -Pattern '^\s*CITA_ENCRYPTION_KEY=(.*)$' | Select-Object -First 1
+if (!$encryptionSetting) {
+    Add-Content -LiteralPath $envFile -Value "CITA_ENCRYPTION_KEY=$(New-FernetKey)" -Encoding utf8
+} elseif (!$encryptionSetting.Matches[0].Groups[1].Value.Trim()) {
+    $lines = [System.IO.File]::ReadAllLines($envFile)
+    for ($index = 0; $index -lt $lines.Length; $index++) {
+        if ($lines[$index] -match '^\s*CITA_ENCRYPTION_KEY=\s*$') {
+            $lines[$index] = "CITA_ENCRYPTION_KEY=$(New-FernetKey)"
+            break
+        }
+    }
+    [System.IO.File]::WriteAllLines($envFile, $lines)
 }
 Write-Host "PostgreSQL local disponible en 127.0.0.1:$Port. Las credenciales están en backend/.env (no compartir)."

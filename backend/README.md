@@ -12,6 +12,7 @@ Para detener: `./scripts/stop-local.ps1`.
 El archivo `.env` se lee desde `backend/.env`, independientemente del directorio actual.
 La base activa es `cerocolas_p1`; SQLite se utiliza únicamente en las pruebas aisladas.
 El prototipo anterior y su archivo SQLite fueron retirados; SQLite solo se usa en las pruebas aisladas.
+El catálogo de las tablas actuales, las reservas P2 y sus relaciones está en [db/TABLAS.md](db/TABLAS.md).
 
 ## Migración y pruebas
 
@@ -52,9 +53,9 @@ máquina porque no está instalado. La ejecución nativa sí se verificó con Po
 ## Restricciones explícitas
 
 - Un worker: los tokens hospitalarios se mantienen solo en memoria del backend.
-- Modo simulador, sin credenciales ni acceso real al hospital.
-- Referencias bloqueadas para reserva hasta que Admisión defina su vigencia.
+- Modo simulador local, sin credenciales ni acceso real al hospital; las reservas de prueba se envían a Prism.
+- El modo simulador local permite probar reservas sin el plazo de vigencia pendiente; en modo hospital las reservas siguen bloqueadas hasta que Admisión defina esa regla.
 - La cuenta local es independiente de la identificación hospitalaria.
 - Producción necesita política institucional, HTTPS/proxy, SMTP y CAPTCHA adecuados,
   configuración de IP de salida y auditoría del hospital. El desafío aritmético es de desarrollo.
-- Las rutas del prototipo anterior fueron retiradas; la aplicación activa solo registra los routers P1.
+- Las rutas del prototipo anterior fueron retiradas; la aplicación activa registra los routers P1 y el flujo de reservas P2.
